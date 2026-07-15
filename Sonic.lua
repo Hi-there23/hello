@@ -253,24 +253,21 @@ end)
 
 
 -- ==========================================
--- 4. LÓGICA DEL PEELOUT
+-- 4. LÓGICA DEL PEELOUT (Solo impulso de velocidad personal)
 -- ==========================================
 local isPeelouting = false
 local peeloutVelocidad = 120 
 local tiempoPeelout = 7.5 
-local tiempoCarga = 3.5 
-local tiempoEsperaAgarre = 1.2 
 local tiempoCooldownPeelout = 24 
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local peeloutEvent = ReplicatedStorage:WaitForChild("GGEvent")
-
--- 2. Creamos la función que llamará al evento cuando el peelout ocurra
-local function agarrarJugador(personajeObjetivo)
-	-- Aquí es donde llamas al evento. 
-	-- Enviamos el personaje objetivo y los datos de velocidad al servidor.
-	peeloutEvent:FireServer(personajeObjetivo, peeloutVelocidad, tiempoPeelout)
-end
+-- ==========================================
+-- 4. LÓGICA DEL PEELOUT (Con Carga y Velocidad)
+-- ==========================================
+local isPeelouting = false
+local peeloutVelocidad = 120 
+local tiempoPeelout = 7.5 
+local tiempoCarga = 3.5 -- ¡Aquí está tu tiempo de carga de vuelta!
+local tiempoCooldownPeelout = 24 
 
 peeloutBtn.MouseButton1Click:Connect(function()
 	if isHabilidadActiva or peeloutEnCooldown then return end
@@ -286,11 +283,8 @@ peeloutBtn.MouseButton1Click:Connect(function()
 	isPeelouting = true
 
 	local renderSteppedConnection
-	local touchConnection
 	local animTrack
 	local deathConnection
-	local jugadorAgarrado = nil 
-	local ultimoAgarre = 0 
 
 	local originalWalkSpeed = humanoid.WalkSpeed
 	local originalJumpPower = humanoid.JumpPower
@@ -300,7 +294,6 @@ peeloutBtn.MouseButton1Click:Connect(function()
 
 		isPeelouting = false
 		isHabilidadActiva = false 
-		jugadorAgarrado = nil
 
 		if humanoid then
 			humanoid.WalkSpeed = originalWalkSpeed
@@ -308,14 +301,8 @@ peeloutBtn.MouseButton1Click:Connect(function()
 		end
 
 		if renderSteppedConnection then renderSteppedConnection:Disconnect() end
-		if touchConnection then touchConnection:Disconnect() end
 		if animTrack then animTrack:Stop() end
 		if deathConnection then deathConnection:Disconnect() end
-
-		-- Destruimos la hitbox fantasma para volver a chocar con jugadores
-		if character and character:FindFirstChild("NoColConstraints") then
-			character.NoColConstraints:Destroy()
-		end
 
 		if rootPart then
 			local att = rootPart:FindFirstChild("PeeloutAtt")
@@ -324,7 +311,6 @@ peeloutBtn.MouseButton1Click:Connect(function()
 			if vel then vel:Destroy() end
 		end
 
-		-- Iniciar cooldown del Peelout
 		peeloutEnCooldown = true
 		manejarCooldown(peeloutBtn, tiempoCooldownPeelout, "Peelout", "peelout")
 	end
@@ -333,6 +319,102 @@ peeloutBtn.MouseButton1Click:Connect(function()
 		finalizarPeelout()
 	end)
 
+	-- ==========================================
+	-- FASE 1: CARGA (El jugador se queda quieto)
+	-- ==========================================
+	humanoid.WalkSpeed = 0
+	humanoid.JumpPower = 0
+
+	if rootPart:FindFirstChild("PeeloutAtt") then rootPart.PeeloutAtt:Destroy() end
+	if rootPart:FindFirstChild("PeeloutVel") then rootPart.PeeloutVel:Destroy() end
+
+	local animacion = Instance.new("Animation")
+	animacion.AnimationId = obtenerAnimacionCorrer(character)
+
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if animator then
+		animTrack = animator:LoadAnimation(animacion)
+		animTrack:Play()
+	end
+
+	-- Bucle de carga: Aumenta la velocidad de la animación progresivamente
+	local t = 0
+	while t < tiempoCarga and isPeelouting and humanoid.Health > 0 do
+		local dt = task.wait()
+		t = t + dt
+		if animTrack then
+			animTrack:AdjustSpeed(1 + (t / tiempoCarga) * 3) 
+		end
+	end
+
+	-- Si el jugador canceló o murió durante la carga, no continuamos
+	if not isPeelouting or humanoid.Health <= 0 then return end
+
+	-- ==========================================
+	-- FASE 2: IMPULSO (Sale disparado)
+	-- ==========================================
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "PeeloutAtt"
+	attachment.Parent = rootPart
+
+	local linearVelocity = Instance.new("LinearVelocity")
+	linearVelocity.Name = "PeeloutVel"
+	linearVelocity.Attachment0 = attachment
+	linearVelocity.ForceLimitMode = Enum.ForceLimitMode.PerAxis
+	linearVelocity.MaxAxesForce = Vector3.new(40000, 0, 40000) 
+	linearVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
+	linearVelocity.Parent = rootPart
+
+	renderSteppedConnection = RunService.RenderStepped:Connect(function()
+		linearVelocity.VectorVelocity = rootPart.CFrame.LookVector * peeloutVelocidad
+	end)
+
+	task.delay(tiempoPeelout, function()
+		finalizarPeelout()
+	end)
+
+	-- FASE DE INICIO
+	-- Evitamos que el jugador camine normal mientras es impulsado por la fuerza
+	humanoid.WalkSpeed = 0
+	humanoid.JumpPower = 0
+
+	-- Limpieza de fuerzas anteriores por seguridad
+	if rootPart:FindFirstChild("PeeloutAtt") then rootPart.PeeloutAtt:Destroy() end
+	if rootPart:FindFirstChild("PeeloutVel") then rootPart.PeeloutVel:Destroy() end
+
+	-- Creamos la fuerza lineal
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "PeeloutAtt"
+	attachment.Parent = rootPart
+
+	local linearVelocity = Instance.new("LinearVelocity")
+	linearVelocity.Name = "PeeloutVel"
+	linearVelocity.Attachment0 = attachment
+	linearVelocity.ForceLimitMode = Enum.ForceLimitMode.PerAxis
+	linearVelocity.MaxAxesForce = Vector3.new(40000, 0, 40000) 
+	linearVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
+	linearVelocity.Parent = rootPart
+
+	-- Reproducir la animación de correr muy rápido
+	local animacion = Instance.new("Animation")
+	animacion.AnimationId = obtenerAnimacionCorrer(character)
+
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if animator then
+		animTrack = animator:LoadAnimation(animacion)
+		animTrack:Play()
+		animTrack:AdjustSpeed(4) -- Hacemos que la animación de correr se vea súper rápida
+	end
+
+	-- Aplicar el impulso constantemente en la dirección a la que miras
+	renderSteppedConnection = RunService.RenderStepped:Connect(function()
+		linearVelocity.VectorVelocity = rootPart.CFrame.LookVector * peeloutVelocidad
+	end)
+
+	-- Terminar la habilidad automáticamente después del tiempo establecido
+	task.delay(tiempoPeelout, function()
+		finalizarPeelout()
+	end)
 	-- FASE 1: CARGA
 	humanoid.WalkSpeed = 0
 	humanoid.JumpPower = 0
