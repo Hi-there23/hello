@@ -45,8 +45,12 @@ local function inicializarInterfaz()
 
 	botonVuelo = Instance.new("TextButton")
 	botonVuelo.Name = "BotonVuelo"
-	botonVuelo.Size = UDim2.new(0, 130, 0, 50)
-	botonVuelo.Position = UDim2.new(0.85, -950, 0.8, -25) 
+	-- DISEÑO USANDO SCALE (Porcentajes): 13% del ancho de la pantalla, 6.5% del alto
+	botonVuelo.Size = UDim2.new(0.13, 0, 0.065, 0)
+	-- Posicionado al 85% horizontal y 80% vertical de la pantalla
+	botonVuelo.Position = UDim2.new(0.15, 0, 0.8, 0) 
+	-- El AnchorPoint en (0.5, 0.5) asegura que el centro del botón se alinee exactamente en esa coordenada
+	botonVuelo.AnchorPoint = Vector2.new(0.5, 0.5)
 	botonVuelo.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 	botonVuelo.TextColor3 = Color3.fromRGB(255, 255, 255)
 	botonVuelo.TextSize = 16
@@ -63,7 +67,7 @@ inicializarInterfaz()
 
 -- ==========================================
 -- 2. FUNCIONES AUXILIARES
--- ==========================================
+-- ==========================================	
 local function obtenerComponentes()
 	local personaje = jugador.Character
 	if not personaje then return nil, nil, nil end
