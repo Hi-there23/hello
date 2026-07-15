@@ -252,12 +252,12 @@ dropdashBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==========================================
--- 4. LÓGICA DEL PEELOUT (Con Carga y Velocidad)
+-- 4. LÓGICA DEL PEELOUT (Limpia y Corregida)
 -- ==========================================
 local isPeelouting = false
 local peeloutVelocidad = 120 
 local tiempoPeelout = 7.5 
-local tiempoCarga = 1.5 -- ¡Aquí está tu tiempo de carga de vuelta!
+local tiempoCarga = 1.5 -- Tu tiempo de carga exacto
 local tiempoCooldownPeelout = 24 
 
 peeloutBtn.MouseButton1Click:Connect(function()
@@ -277,6 +277,7 @@ peeloutBtn.MouseButton1Click:Connect(function()
 	local animTrack
 	local deathConnection
 
+	-- Guardamos la velocidad original para devolverla al final
 	local originalWalkSpeed = humanoid.WalkSpeed
 	local originalJumpPower = humanoid.JumpPower
 
@@ -286,15 +287,18 @@ peeloutBtn.MouseButton1Click:Connect(function()
 		isPeelouting = false
 		isHabilidadActiva = false 
 
+		-- 1. Restaurar velocidad y salto normal
 		if humanoid then
 			humanoid.WalkSpeed = originalWalkSpeed
 			humanoid.JumpPower = originalJumpPower
 		end
 
+		-- 2. Detener la fuerza y la animación
 		if renderSteppedConnection then renderSteppedConnection:Disconnect() end
 		if animTrack then animTrack:Stop() end
 		if deathConnection then deathConnection:Disconnect() end
 
+		-- 3. Limpiar las piezas físicas creadas
 		if rootPart then
 			local att = rootPart:FindFirstChild("PeeloutAtt")
 			if att then att:Destroy() end
@@ -302,10 +306,12 @@ peeloutBtn.MouseButton1Click:Connect(function()
 			if vel then vel:Destroy() end
 		end
 
+		-- 4. Iniciar cooldown
 		peeloutEnCooldown = true
 		manejarCooldown(peeloutBtn, tiempoCooldownPeelout, "Peelout", "peelout")
 	end
 
+	-- Si morimos, cancelamos todo
 	deathConnection = humanoid.Died:Connect(function()
 		finalizarPeelout()
 	end)
@@ -316,6 +322,7 @@ peeloutBtn.MouseButton1Click:Connect(function()
 	humanoid.WalkSpeed = 0
 	humanoid.JumpPower = 0
 
+	-- Limpieza preventiva
 	if rootPart:FindFirstChild("PeeloutAtt") then rootPart.PeeloutAtt:Destroy() end
 	if rootPart:FindFirstChild("PeeloutVel") then rootPart.PeeloutVel:Destroy() end
 
@@ -328,7 +335,7 @@ peeloutBtn.MouseButton1Click:Connect(function()
 		animTrack:Play()
 	end
 
-	-- Bucle de carga: Aumenta la velocidad de la animación progresivamente
+	-- Aumentamos la velocidad de la animación progresivamente
 	local t = 0
 	while t < tiempoCarga and isPeelouting and humanoid.Health > 0 do
 		local dt = task.wait()
@@ -338,7 +345,6 @@ peeloutBtn.MouseButton1Click:Connect(function()
 		end
 	end
 
-	-- Si el jugador canceló o murió durante la carga, no continuamos
 	if not isPeelouting or humanoid.Health <= 0 then return end
 
 	-- ==========================================
@@ -356,131 +362,16 @@ peeloutBtn.MouseButton1Click:Connect(function()
 	linearVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
 	linearVelocity.Parent = rootPart
 
+	-- Mantenemos la animación súper rápida mientras corremos
+	if animTrack then
+		animTrack:AdjustSpeed(4)
+	end
+
 	renderSteppedConnection = RunService.RenderStepped:Connect(function()
 		linearVelocity.VectorVelocity = rootPart.CFrame.LookVector * peeloutVelocidad
 	end)
 
-	task.delay(tiempoPeelout, function()
-		finalizarPeelout()
-	end)
-
-	-- FASE DE INICIO
-	-- Evitamos que el jugador camine normal mientras es impulsado por la fuerza
-	humanoid.WalkSpeed = 0
-	humanoid.JumpPower = 0
-
-	-- Limpieza de fuerzas anteriores por seguridad
-	if rootPart:FindFirstChild("PeeloutAtt") then rootPart.PeeloutAtt:Destroy() end
-	if rootPart:FindFirstChild("PeeloutVel") then rootPart.PeeloutVel:Destroy() end
-
-	-- Creamos la fuerza lineal
-	local attachment = Instance.new("Attachment")
-	attachment.Name = "PeeloutAtt"
-	attachment.Parent = rootPart
-
-	local linearVelocity = Instance.new("LinearVelocity")
-	linearVelocity.Name = "PeeloutVel"
-	linearVelocity.Attachment0 = attachment
-	linearVelocity.ForceLimitMode = Enum.ForceLimitMode.PerAxis
-	linearVelocity.MaxAxesForce = Vector3.new(40000, 0, 40000) 
-	linearVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
-	linearVelocity.Parent = rootPart
-
-	-- Reproducir la animación de correr muy rápido
-	local animacion = Instance.new("Animation")
-	animacion.AnimationId = obtenerAnimacionCorrer(character)
-
-	local animator = humanoid:FindFirstChildOfClass("Animator")
-	if animator then
-		animTrack = animator:LoadAnimation(animacion)
-		animTrack:Play()
-		animTrack:AdjustSpeed(4) -- Hacemos que la animación de correr se vea súper rápida
-	end
-
-	-- Aplicar el impulso constantemente en la dirección a la que miras
-	renderSteppedConnection = RunService.RenderStepped:Connect(function()
-		linearVelocity.VectorVelocity = rootPart.CFrame.LookVector * peeloutVelocidad
-	end)
-
-	-- Terminar la habilidad automáticamente después del tiempo establecido
-	task.delay(tiempoPeelout, function()
-		finalizarPeelout()
-	end)
-	-- FASE 1: CARGA
-	humanoid.WalkSpeed = 0
-	humanoid.JumpPower = 0
-
-	if rootPart:FindFirstChild("PeeloutAtt") then rootPart.PeeloutAtt:Destroy() end
-	if rootPart:FindFirstChild("PeeloutVel") then rootPart.PeeloutVel:Destroy() end
-
-	local attachment = Instance.new("Attachment")
-	attachment.Name = "PeeloutAtt"
-	attachment.Parent = rootPart
-
-	local linearVelocity = Instance.new("LinearVelocity")
-	linearVelocity.Name = "PeeloutVel"
-	linearVelocity.Attachment0 = attachment
-	linearVelocity.ForceLimitMode = Enum.ForceLimitMode.PerAxis
-	linearVelocity.MaxAxesForce = Vector3.new(100000, 0, 100000) 
-	linearVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
-	linearVelocity.VectorVelocity = Vector3.new(0, 0, 0)
-	linearVelocity.Parent = rootPart
-
-	local animacion = Instance.new("Animation")
-	animacion.AnimationId = obtenerAnimacionCorrer(character)
-
-	local animator = humanoid:FindFirstChildOfClass("Animator")
-	if animator then
-		animTrack = animator:LoadAnimation(animacion)
-		animTrack:Play()
-	end
-
-	local t = 0
-	while t < tiempoCarga and isPeelouting and humanoid.Health > 0 do
-		local dt = task.wait()
-		t = t + dt
-		if animTrack then
-			animTrack:AdjustSpeed(1 + (t / tiempoCarga) * 3) 
-		end
-	end
-
-	if not isPeelouting or humanoid.Health <= 0 then return end
-
-	-- FASE 2: IMPULSO
-	-- Nos volvemos intangibles para otros jugadores (evita que tapen el paso)
-	crearHitboxFantasma(character)
-
-	linearVelocity.MaxAxesForce = Vector3.new(40000, 0, 40000) 
-
-	renderSteppedConnection = RunService.RenderStepped:Connect(function()
-		linearVelocity.VectorVelocity = rootPart.CFrame.LookVector * peeloutVelocidad
-		-- BORRAMOS lo del CFrame del enemigo aquí, el servidor se encargará de eso.
-	end)
-
-	-- En tu evento Touched (aprox. línea 281)
-	touchConnection = rootPart.Touched:Connect(function(hit)
-		if not isPeelouting then return end
-
-		local enemigoChar = hit.Parent
-		if enemigoChar == character then return end 
-
-		local enemigoHum = enemigoChar:FindFirstChildOfClass("Humanoid")
-		local enemigoRoot = enemigoChar:FindFirstChild("HumanoidRootPart")
-
-		if enemigoHum and enemigoRoot then
-			if os.clock() - ultimoAgarre < tiempoEsperaAgarre then return end
-
-			-- ¡AQUÍ ESTÁ LA MAGIA! Si no tenemos a nadie, lo agarramos y avisamos al servidor
-			if jugadorAgarrado == nil then
-				jugadorAgarrado = enemigoChar
-				ultimoAgarre = os.clock() 
-
-				-- Disparamos el RemoteEvent hacia el servidor
-				agarrarJugador(enemigoChar) 
-			end
-		end
-	end)
-
+	-- Finalizar cuando pase el tiempo establecido
 	task.delay(tiempoPeelout, function()
 		finalizarPeelout()
 	end)
