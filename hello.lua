@@ -11,8 +11,8 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
 -- --- CONFIGURACIÓN DE PARÁMETROS SOLICITADOS ---
-local VELOCIDAD_CAMINAR = 5
-local VELOCIDAD_CORRER = 18.5
+local VELOCIDAD_CAMINAR = 7.5
+local VELOCIDAD_CORRER = 20.5
 local ALTURA_MINIMA_VOLTERETA = 14.5 
 
 -- --- ID OFICIAL DEL CATÁLOGO DE ROBLOX ---
@@ -65,7 +65,7 @@ local function configurarPersonaje(character)
 
 	-- BUCLE OPTIMIZADO: ACELERACIÓN Y DESACELERACIÓN SUAVE (LERP)
 	task.spawn(function()
-		local factorSuavizadoMovimiento = 0.08 -- Controla la suavidad (Menor número = más suave/pesado)
+		local factorSuavizadoMovimiento = 0.045 -- Controla la suavidad (Menor número = más suave/pesado)
 
 		while character and character.Parent and humanoid and humanoid.Health > 0 do
 			local velocidadObjetivo = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
