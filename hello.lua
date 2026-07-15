@@ -13,7 +13,7 @@ local Camera = Workspace.CurrentCamera
 -- --- CONFIGURACIÓN DE PARÁMETROS SOLICITADOS ---
 local VELOCIDAD_CAMINAR = 5
 local VELOCIDAD_CORRER = 18.5
-local ALTURA_MINIMA_VOLTERETA = 25.5 
+local ALTURA_MINIMA_VOLTERETA = 14.5 
 
 -- --- ID OFICIAL DEL CATÁLOGO DE ROBLOX ---
 local ID_CATALOGO_OFICIAL = 18537367238 
@@ -63,15 +63,24 @@ local function configurarPersonaje(character)
 	local humanoid = character:WaitForChild("Humanoid")
 	humanoid.WalkSpeed = VELOCIDAD_CAMINAR
 
+	-- BUCLE OPTIMIZADO: ACELERACIÓN Y DESACELERACIÓN SUAVE (LERP)
 	task.spawn(function()
+		local factorSuavizadoMovimiento = 0.08 -- Controla la suavidad (Menor número = más suave/pesado)
+
 		while character and character.Parent and humanoid and humanoid.Health > 0 do
 			local velocidadObjetivo = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
-			if humanoid.WalkSpeed ~= velocidadObjetivo then
+
+			-- Si la velocidad actual no es igual a la objetivo, la acercamos gradualmente
+			if math.abs(humanoid.WalkSpeed - velocidadObjetivo) > 0.05 then
+				-- Fórmula de interpolación para suavizar el cambio de velocidad
+				humanoid.WalkSpeed = humanoid.WalkSpeed + (velocidadObjetivo - humanoid.WalkSpeed) * factorSuavizadoMovimiento
+			else
 				humanoid.WalkSpeed = velocidadObjetivo
 			end
-			task.wait(0.1)
+			task.wait(0.02) -- Frecuencia rápida para que la aceleración sea totalmente fluida
 		end
 	end)
+
 
 	local animateScript = character:WaitForChild("Animate", 5)
 	if animateScript then
