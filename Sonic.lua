@@ -1,6 +1,15 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-	
+local player = Players.LocalPlayer
+local rootPart = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+
+-- Esta función es la clave: toma el control de la víctima
+local function tomarControl(enemigoRoot)
+	local success, err = pcall(function()
+		enemigoRoot:SetNetworkOwner(player)
+	end)
+end
+
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
@@ -251,13 +260,15 @@ dropdashBtn.MouseButton1Click:Connect(function()
 	end)
 end)
 
+
 -- ==========================================
--- 4. LÓGICA DEL PEELOUT (Limpia y Corregida)
+-- 4. LÓGICA DEL PEELOUT
 -- ==========================================
 local isPeelouting = false
 local peeloutVelocidad = 120 
 local tiempoPeelout = 7.5 
-local tiempoCarga = 1.5 -- Tu tiempo de carga exacto
+local tiempoCarga = 3.5 
+local tiempoEsperaAgarre = 1.2 
 local tiempoCooldownPeelout = 24 
 
 peeloutBtn.MouseButton1Click:Connect(function()
@@ -274,10 +285,12 @@ peeloutBtn.MouseButton1Click:Connect(function()
 	isPeelouting = true
 
 	local renderSteppedConnection
+	local touchConnection
 	local animTrack
 	local deathConnection
+	local jugadorAgarrado = nil 
+	local ultimoAgarre = 0 
 
-	-- Guardamos la velocidad original para devolverla al final
 	local originalWalkSpeed = humanoid.WalkSpeed
 	local originalJumpPower = humanoid.JumpPower
 
@@ -286,19 +299,23 @@ peeloutBtn.MouseButton1Click:Connect(function()
 
 		isPeelouting = false
 		isHabilidadActiva = false 
+		jugadorAgarrado = nil
 
-		-- 1. Restaurar velocidad y salto normal
 		if humanoid then
 			humanoid.WalkSpeed = originalWalkSpeed
 			humanoid.JumpPower = originalJumpPower
 		end
 
-		-- 2. Detener la fuerza y la animación
 		if renderSteppedConnection then renderSteppedConnection:Disconnect() end
+		if touchConnection then touchConnection:Disconnect() end
 		if animTrack then animTrack:Stop() end
 		if deathConnection then deathConnection:Disconnect() end
 
-		-- 3. Limpiar las piezas físicas creadas
+		-- Destruimos la hitbox fantasma para volver a chocar con jugadores
+		if character and character:FindFirstChild("NoColConstraints") then
+			character.NoColConstraints:Destroy()
+		end
+
 		if rootPart then
 			local att = rootPart:FindFirstChild("PeeloutAtt")
 			if att then att:Destroy() end
@@ -306,25 +323,34 @@ peeloutBtn.MouseButton1Click:Connect(function()
 			if vel then vel:Destroy() end
 		end
 
-		-- 4. Iniciar cooldown
+		-- Iniciar cooldown del Peelout
 		peeloutEnCooldown = true
 		manejarCooldown(peeloutBtn, tiempoCooldownPeelout, "Peelout", "peelout")
 	end
 
-	-- Si morimos, cancelamos todo
 	deathConnection = humanoid.Died:Connect(function()
 		finalizarPeelout()
 	end)
 
-	-- ==========================================
-	-- FASE 1: CARGA (El jugador se queda quieto)
-	-- ==========================================
+	-- FASE 1: CARGA
 	humanoid.WalkSpeed = 0
 	humanoid.JumpPower = 0
 
-	-- Limpieza preventiva
 	if rootPart:FindFirstChild("PeeloutAtt") then rootPart.PeeloutAtt:Destroy() end
 	if rootPart:FindFirstChild("PeeloutVel") then rootPart.PeeloutVel:Destroy() end
+
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "PeeloutAtt"
+	attachment.Parent = rootPart
+
+	local linearVelocity = Instance.new("LinearVelocity")
+	linearVelocity.Name = "PeeloutVel"
+	linearVelocity.Attachment0 = attachment
+	linearVelocity.ForceLimitMode = Enum.ForceLimitMode.PerAxis
+	linearVelocity.MaxAxesForce = Vector3.new(100000, 0, 100000) 
+	linearVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
+	linearVelocity.VectorVelocity = Vector3.new(0, 0, 0)
+	linearVelocity.Parent = rootPart
 
 	local animacion = Instance.new("Animation")
 	animacion.AnimationId = obtenerAnimacionCorrer(character)
@@ -335,7 +361,6 @@ peeloutBtn.MouseButton1Click:Connect(function()
 		animTrack:Play()
 	end
 
-	-- Aumentamos la velocidad de la animación progresivamente
 	local t = 0
 	while t < tiempoCarga and isPeelouting and humanoid.Health > 0 do
 		local dt = task.wait()
@@ -347,31 +372,53 @@ peeloutBtn.MouseButton1Click:Connect(function()
 
 	if not isPeelouting or humanoid.Health <= 0 then return end
 
-	-- ==========================================
-	-- FASE 2: IMPULSO (Sale disparado)
-	-- ==========================================
-	local attachment = Instance.new("Attachment")
-	attachment.Name = "PeeloutAtt"
-	attachment.Parent = rootPart
+	-- FASE 2: IMPULSO
+	-- Nos volvemos intangibles para otros jugadores (evita que tapen el paso)
+	crearHitboxFantasma(character)
 
-	local linearVelocity = Instance.new("LinearVelocity")
-	linearVelocity.Name = "PeeloutVel"
-	linearVelocity.Attachment0 = attachment
-	linearVelocity.ForceLimitMode = Enum.ForceLimitMode.PerAxis
 	linearVelocity.MaxAxesForce = Vector3.new(40000, 0, 40000) 
-	linearVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
-	linearVelocity.Parent = rootPart
-
-	-- Mantenemos la animación súper rápida mientras corremos
-	if animTrack then
-		animTrack:AdjustSpeed(4)
-	end
 
 	renderSteppedConnection = RunService.RenderStepped:Connect(function()
 		linearVelocity.VectorVelocity = rootPart.CFrame.LookVector * peeloutVelocidad
+
+		if jugadorAgarrado then
+			local enemigoRoot = jugadorAgarrado:FindFirstChild("HumanoidRootPart")
+			if enemigoRoot then
+				enemigoRoot.CFrame = rootPart.CFrame * CFrame.new(0, 5, 0)
+			else
+				jugadorAgarrado = nil
+			end
+		end
 	end)
 
-	-- Finalizar cuando pase el tiempo establecido
+	touchConnection = rootPart.Touched:Connect(function(hit)
+		if not isPeelouting then return end
+
+		local enemigoChar = hit.Parent
+		if enemigoChar == character then return end 
+
+		local enemigoHum = enemigoChar:FindFirstChildOfClass("Humanoid")
+		local enemigoRoot = enemigoChar:FindFirstChild("HumanoidRootPart")
+
+		if enemigoHum and enemigoRoot then
+			if os.clock() - ultimoAgarre < tiempoEsperaAgarre then return end
+
+			if jugadorAgarrado == nil then
+				jugadorAgarrado = enemigoChar
+				ultimoAgarre = os.clock() 
+
+			elseif jugadorAgarrado ~= enemigoChar then
+				local viejoRoot = jugadorAgarrado:FindFirstChild("HumanoidRootPart")
+				if viejoRoot then
+					viejoRoot.CFrame = enemigoRoot.CFrame 
+				end
+
+				jugadorAgarrado = enemigoChar
+				ultimoAgarre = os.clock() 
+			end
+		end
+	end)
+
 	task.delay(tiempoPeelout, function()
 		finalizarPeelout()
 	end)
