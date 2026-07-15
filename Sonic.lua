@@ -381,17 +381,10 @@ peeloutBtn.MouseButton1Click:Connect(function()
 
 	renderSteppedConnection = RunService.RenderStepped:Connect(function()
 		linearVelocity.VectorVelocity = rootPart.CFrame.LookVector * peeloutVelocidad
-
-		if jugadorAgarrado then
-			local enemigoRoot = jugadorAgarrado:FindFirstChild("HumanoidRootPart")
-			if enemigoRoot then
-				enemigoRoot.CFrame = rootPart.CFrame * CFrame.new(0, 5, 0)
-			else
-				jugadorAgarrado = nil
-			end
-		end
+		-- BORRAMOS lo del CFrame del enemigo aquí, el servidor se encargará de eso.
 	end)
 
+	-- En tu evento Touched (aprox. línea 281)
 	touchConnection = rootPart.Touched:Connect(function(hit)
 		if not isPeelouting then return end
 
@@ -404,18 +397,13 @@ peeloutBtn.MouseButton1Click:Connect(function()
 		if enemigoHum and enemigoRoot then
 			if os.clock() - ultimoAgarre < tiempoEsperaAgarre then return end
 
+			-- ¡AQUÍ ESTÁ LA MAGIA! Si no tenemos a nadie, lo agarramos y avisamos al servidor
 			if jugadorAgarrado == nil then
 				jugadorAgarrado = enemigoChar
 				ultimoAgarre = os.clock() 
 
-			elseif jugadorAgarrado ~= enemigoChar then
-				local viejoRoot = jugadorAgarrado:FindFirstChild("HumanoidRootPart")
-				if viejoRoot then
-					viejoRoot.CFrame = enemigoRoot.CFrame 
-				end
-
-				jugadorAgarrado = enemigoChar
-				ultimoAgarre = os.clock() 
+				-- Disparamos el RemoteEvent hacia el servidor
+				agarrarJugador(enemigoChar) 
 			end
 		end
 	end)
