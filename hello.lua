@@ -182,23 +182,6 @@ local function iniciarFisicasAvanzadas(character)
 			humanoid.CameraOffset = desfaseActual
 		end
 
-		-- INYECTOR ANTIBUG: Valida y fuerza dinámicamente las IDs según el estado real de velocidad
-		if animateScript and idCaminataOriginal and idCarreraOriginal then
-			pcall(function()
-				if esSprinting then
-					-- Al correr, forzamos que el script de Roblox use la caminata original
-					if animateScript.run.RunAnim.AnimationId ~= idCaminataOriginal then
-						animateScript.run.RunAnim.AnimationId = idCaminataOriginal
-					end
-				else
-					-- Al caminar lento, forzamos que use el trote/carrera original
-					if animateScript.walk.WalkAnim.AnimationId ~= idCarreraOriginal then
-						animateScript.walk.WalkAnim.AnimationId = idCarreraOriginal
-					end
-				end
-			end)
-		end
-
 		-- 2. ESCÁNER LÁSER DETECTOR DE IMPACTOS (RAYCASTING)
 		local raycastParams = RaycastParams.new()
 		raycastParams.FilterDescendantsInstances = {character}
