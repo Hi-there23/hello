@@ -1,5 +1,5 @@
 -- ====================================================================
--- SCRIPT COMPLETO DEFINITIVO: FIX TOTAL POST-VOLTERETA + LERP + RÉPLICA
+-- SCRIPT COMPLETO DEFINITIVO: MÁXIMA EXTENSIÓN, RÉPLICA Y TODAS LAS FUNCIONES
 -- ====================================================================
 
 local Players = game:GetService("Players")
@@ -11,9 +11,9 @@ local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
 -- --- CONFIGURACIÓN DE PARÁMETROS SOLICITADOS ---
-local VELOCIDAD_CAMINAR = 5.5
+local VELOCIDAD_CAMINAR = 5
 local VELOCIDAD_CORRER = 18.5
-local ALTURA_MINIMA_VOLTERETA = 15.5 
+local ALTURA_MINIMA_VOLTERETA = 25.5 
 
 -- --- ID OFICIAL DEL CATÁLOGO DE ROBLOX ---
 local ID_CATALOGO_OFICIAL = 18537367238 
@@ -56,30 +56,45 @@ RunService.RenderStepped:Connect(function()
 	end
 end)
 
--- --- SISTEMA DE MOVIMIENTO CON ACELERACIÓN SUAVE ---
+-- --- SISTEMA DE MOVIMIENTO REPARADO Y BUFERS ---
 local esSprinting = false
 
 local function configurarPersonaje(character)
 	local humanoid = character:WaitForChild("Humanoid")
 	humanoid.WalkSpeed = VELOCIDAD_CAMINAR
 
-	-- BUCLE DE ACELERACIÓN Y DESACELERACIÓN SUAVE (LERP)
+	-- BUCLE OPTIMIZADO: ACELERACIÓN Y DESACELERACIÓN SUAVE (LERP)
 	task.spawn(function()
-		local factorSuavizadoMovimiento = 0.15 
+		local factorSuavizadoMovimiento = 0.8 -- Controla la suavidad (Menor número = más suave/pesado)
+
 		while character and character.Parent and humanoid and humanoid.Health > 0 do
 			local velocidadObjetivo = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
 
+			-- Si la velocidad actual no es igual a la objetivo, la acercamos gradualmente
 			if math.abs(humanoid.WalkSpeed - velocidadObjetivo) > 0.05 then
+				-- Fórmula de interpolación para suavizar el cambio de velocidad
 				humanoid.WalkSpeed = humanoid.WalkSpeed + (velocidadObjetivo - humanoid.WalkSpeed) * factorSuavizadoMovimiento
 			else
 				humanoid.WalkSpeed = velocidadObjetivo
 			end
-			task.wait(0.02) 
+			task.wait(0.02) -- Frecuencia rápida para que la aceleración sea totalmente fluida
 		end
 	end)
+
+
+	local animateScript = character:WaitForChild("Animate", 5)
+	if animateScript then
+		pcall(function()
+			local idCaminataOriginal = animateScript.walk.WalkAnim.AnimationId
+			local idCarreraOriginal = animateScript.run.RunAnim.AnimationId
+
+			animateScript.walk.WalkAnim.AnimationId = idCarreraOriginal 
+			animateScript.run.RunAnim.AnimationId = idCaminataOriginal   
+		end)
+	end
 end
 
--- Lógica táctil avanzada del botón
+-- Lógica táctil avanzada del botón (Click rápido vs Mantener presionado)
 local manteniendoBoton = false
 local botonFijadoEnPantalla = false
 
@@ -109,10 +124,12 @@ RunButton.MouseButton1Up:Connect(function()
 		if humanoid then
 			if not esSprinting then
 				esSprinting = true
+				humanoid.WalkSpeed = VELOCIDAD_CORRER
 				RunButton.BackgroundColor3 = Color3.fromRGB(230, 50, 50)
 				RunButton.Text = "RÁPIDO"
 			else
 				esSprinting = false
+				humanoid.WalkSpeed = VELOCIDAD_CAMINAR
 				RunButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
 				RunButton.Text = "CORRER"
 			end
@@ -120,31 +137,19 @@ RunButton.MouseButton1Up:Connect(function()
 	end
 end)
 
--- --- CONTROLADOR DE CÁMARA, RAYCASTING Y DETECTOR DINÁMICO DE ANIMACIÓN ---
+-- --- CONTROLADOR DE CÁMARA ORIGINAL CON CONTROL DE SHIFT LOCK Y RÉPLICA ---
 local conexionCamara
 
 local function iniciarFisicasAvanzadas(character)
 	local torso = character:WaitForChild("UpperTorso", 5) or character:WaitForChild("Torso", 5)
 	local humanoid = character:WaitForChild("Humanoid")
 	local rootPart = character:WaitForChild("HumanoidRootPart")
-	local animateScript = character:WaitForChild("Animate", 5)
 	if not torso or not humanoid or not rootPart then return end
 
 	Camera.CameraType = Enum.CameraType.Custom
 	Camera.CameraSubject = humanoid 
 
-	-- Guardar IDs originales de forma segura una sola vez al cargar
-	local idCaminataOriginal = nil
-	local idCarreraOriginal = nil
-
-	if animateScript then
-		pcall(function()
-			idCaminataOriginal = animateScript.walk.WalkAnim.AnimationId
-			idCarreraOriginal = animateScript.run.RunAnim.AnimationId
-		end)
-	end
-
-	-- Carga de animación de la voltereta
+	-- Carga de animación oficial mediante puente de réplica local
 	local animVoltereta = Instance.new("Animation")
 	animVoltereta.AnimationId = "rbxassetid://" .. tostring(ID_CATALOGO_OFICIAL)
 	local trackVoltereta = humanoid:LoadAnimation(animVoltereta)
@@ -161,28 +166,13 @@ local function iniciarFisicasAvanzadas(character)
 	local poderSaltoOriginal = humanoid.UseJumpPower and humanoid.JumpPower or humanoid.JumpHeight
 	local usaPoderOAltura = humanoid.UseJumpPower
 
-	-- Función auxiliar interna para forzar de inmediato los valores correctos de animación
-	local function forzarAnimacionesSegunEstado()
-		if animateScript and idCaminataOriginal and idCarreraOriginal then
-			pcall(function()
-				if esSprinting then
-					animateScript.run.RunAnim.AnimationId = idCaminataOriginal
-					animateScript.walk.WalkAnim.AnimationId = idCaminataOriginal
-				else
-					animateScript.walk.WalkAnim.AnimationId = idCarreraOriginal
-					animateScript.run.RunAnim.AnimationId = idCarreraOriginal
-				end
-			end)
-		end
-	end
-
 	conexionCamara = RunService.RenderStepped:Connect(function()
 		if not torso or not torso.Parent or not humanoid then
 			conexionCamara:Disconnect()
 			return
 		end
 
-		-- 1. DETECTOR DINÁMICO DE SHIFT LOCK
+		-- 1. DETECTOR DINÁMICO DE SHIFT LOCK (INMUNIDAD DE CÁMARA)
 		local shiftLockActivo = (UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter)
 
 		if shiftLockActivo then
@@ -195,11 +185,6 @@ local function iniciarFisicasAvanzadas(character)
 			desfaseObjetivo = Vector3.new(math.clamp(0, -1.8, 1.8), 0, math.clamp(desfaseObjetivo.Z, -1.8, 1.8))
 			desfaseActual = desfaseActual:Lerp(desfaseObjetivo, factorSuavizadoNormal)
 			humanoid.CameraOffset = desfaseActual
-		end
-
-		-- INYECTOR ANTIBUG CONTINUO
-		if not ejecutandoVoltereta then
-			forzarAnimacionesSegunEstado()
 		end
 
 		-- 2. ESCÁNER LÁSER DETECTOR DE IMPACTOS (RAYCASTING)
@@ -222,6 +207,7 @@ local function iniciarFisicasAvanzadas(character)
 				if distanciaCaida >= ALTURA_MINIMA_VOLTERETA then
 					ejecutandoVoltereta = true
 
+					-- BLOQUEAR EL SALTO TOTALMENTE
 					if usaPoderOAltura then
 						humanoid.JumpPower = 0
 					else
@@ -256,10 +242,7 @@ local function iniciarFisicasAvanzadas(character)
 							humanoid.JumpHeight = poderSaltoOriginal
 						end
 
-						-- REVISIÓN DE SEGURIDAD POST-VOLTERETA: Forzar estado actual inmediatamente
 						humanoid.WalkSpeed = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
-						forzarAnimacionesSegunEstado() -- Corrige el bug de quedarse pegado en animación incorrecta
-
 						ejecutandoVoltereta = false
 					end)
 				end
