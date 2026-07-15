@@ -251,22 +251,13 @@ dropdashBtn.MouseButton1Click:Connect(function()
 	end)
 end)
 
-
--- ==========================================
--- 4. LÓGICA DEL PEELOUT (Solo impulso de velocidad personal)
--- ==========================================
-local isPeelouting = false
-local peeloutVelocidad = 120 
-local tiempoPeelout = 7.5 
-local tiempoCooldownPeelout = 24 
-
 -- ==========================================
 -- 4. LÓGICA DEL PEELOUT (Con Carga y Velocidad)
 -- ==========================================
 local isPeelouting = false
 local peeloutVelocidad = 120 
 local tiempoPeelout = 7.5 
-local tiempoCarga = 3.5 -- ¡Aquí está tu tiempo de carga de vuelta!
+local tiempoCarga = 1.5 -- ¡Aquí está tu tiempo de carga de vuelta!
 local tiempoCooldownPeelout = 24 
 
 peeloutBtn.MouseButton1Click:Connect(function()
