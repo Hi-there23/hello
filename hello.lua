@@ -1,5 +1,5 @@
 -- ====================================================================
--- SCRIPT COMPLETO DEFINITIVO: SOLUCIÓN BUG ANIMACIÓN INVERTIDA + LERP
+-- SCRIPT COMPLETO DEFINITIVO: FIX TOTAL POST-VOLTERETA + LERP + RÉPLICA
 -- ====================================================================
 
 local Players = game:GetService("Players")
@@ -13,7 +13,7 @@ local Camera = Workspace.CurrentCamera
 -- --- CONFIGURACIÓN DE PARÁMETROS SOLICITADOS ---
 local VELOCIDAD_CAMINAR = 5.5
 local VELOCIDAD_CORRER = 18.5
-local ALTURA_MINIMA_VOLTERETA = 14.5
+local ALTURA_MINIMA_VOLTERETA = 15.5 
 
 -- --- ID OFICIAL DEL CATÁLOGO DE ROBLOX ---
 local ID_CATALOGO_OFICIAL = 18537367238 
@@ -65,7 +65,7 @@ local function configurarPersonaje(character)
 
 	-- BUCLE DE ACELERACIÓN Y DESACELERACIÓN SUAVE (LERP)
 	task.spawn(function()
-		local factorSuavizadoMovimiento = 0.7 -- Controla la suavidad de aceleración
+		local factorSuavizadoMovimiento = 0.15 
 		while character and character.Parent and humanoid and humanoid.Health > 0 do
 			local velocidadObjetivo = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
 
@@ -79,7 +79,7 @@ local function configurarPersonaje(character)
 	end)
 end
 
--- Lógica táctil avanzada del botón (Click rápido vs Mantener presionado)
+-- Lógica táctil avanzada del botón
 local manteniendoBoton = false
 local botonFijadoEnPantalla = false
 
@@ -161,6 +161,21 @@ local function iniciarFisicasAvanzadas(character)
 	local poderSaltoOriginal = humanoid.UseJumpPower and humanoid.JumpPower or humanoid.JumpHeight
 	local usaPoderOAltura = humanoid.UseJumpPower
 
+	-- Función auxiliar interna para forzar de inmediato los valores correctos de animación
+	local function forzarAnimacionesSegunEstado()
+		if animateScript and idCaminataOriginal and idCarreraOriginal then
+			pcall(function()
+				if esSprinting then
+					animateScript.run.RunAnim.AnimationId = idCaminataOriginal
+					animateScript.walk.WalkAnim.AnimationId = idCaminataOriginal
+				else
+					animateScript.walk.WalkAnim.AnimationId = idCarreraOriginal
+					animateScript.run.RunAnim.AnimationId = idCarreraOriginal
+				end
+			end)
+		end
+	end
+
 	conexionCamara = RunService.RenderStepped:Connect(function()
 		if not torso or not torso.Parent or not humanoid then
 			conexionCamara:Disconnect()
@@ -180,6 +195,11 @@ local function iniciarFisicasAvanzadas(character)
 			desfaseObjetivo = Vector3.new(math.clamp(0, -1.8, 1.8), 0, math.clamp(desfaseObjetivo.Z, -1.8, 1.8))
 			desfaseActual = desfaseActual:Lerp(desfaseObjetivo, factorSuavizadoNormal)
 			humanoid.CameraOffset = desfaseActual
+		end
+
+		-- INYECTOR ANTIBUG CONTINUO
+		if not ejecutandoVoltereta then
+			forzarAnimacionesSegunEstado()
 		end
 
 		-- 2. ESCÁNER LÁSER DETECTOR DE IMPACTOS (RAYCASTING)
@@ -235,6 +255,10 @@ local function iniciarFisicasAvanzadas(character)
 						else
 							humanoid.JumpHeight = poderSaltoOriginal
 						end
+
+						-- REVISIÓN DE SEGURIDAD POST-VOLTERETA: Forzar estado actual inmediatamente
+						humanoid.WalkSpeed = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
+						forzarAnimacionesSegunEstado() -- Corrige el bug de quedarse pegado en animación incorrecta
 
 						ejecutandoVoltereta = false
 					end)
