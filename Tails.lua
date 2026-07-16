@@ -48,7 +48,7 @@ local function inicializarInterfaz()
 	-- DISEÑO USANDO SCALE (Porcentajes): 13% del ancho de la pantalla, 6.5% del alto
 	botonVuelo.Size = UDim2.new(0.13, 0, 0.065, 0)
 	-- Posicionado al 85% horizontal y 80% vertical de la pantalla
-	botonVuelo.Position = UDim2.new(0.15, 0, 0.8, 0) 
+	botonVuelo.Position = UDim2.new(0.60, 0, 0.8, 0) 
 	-- El AnchorPoint en (0.5, 0.5) asegura que el centro del botón se alinee exactamente en esa coordenada
 	botonVuelo.AnchorPoint = Vector2.new(0.5, 0.5)
 	botonVuelo.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
