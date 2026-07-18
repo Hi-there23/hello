@@ -1,260 +1,265 @@
--- SERVICIOS
+-- ====================================================================
+-- SCRIPT COMPLETO DEFINITIVO: MÁXIMA EXTENSIÓN, RÉPLICA Y TODAS LAS FUNCIONES
+-- ====================================================================
+
 local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
 
--- VARIABLES PRINCIPALES
-local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local humanoid = character:WaitForChild("Humanoid")
-local rootPart = character:WaitForChild("HumanoidRootPart")
-local animator = humanoid:WaitForChild("Animator")
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
 
--- CONFIGURACIÓN
-local TIEMPO_ESPERA_FLOTAR = 0.355   -- Tiempo mínimo cayendo para poder activar el flote
-local COOLDOWN_REPETIR_FLOTE = 1.5 -- Cooldown invisible SOLO tras terminar el flote
-local COOLDOWN_IMPULSO = 20        -- Tiempo de espera para volver a usar el impulso
-local ID_ANIMACION = "rbxassetid://114731495347458"
+-- --- CONFIGURACIÓN DE PARÁMETROS SOLICITADOS ---
+local VELOCIDAD_CAMINAR = 5.5
+local VELOCIDAD_CORRER = 18.5
+local ALTURA_MINIMA_VOLTERETA = 15.5 
 
--- ESTADOS
-local estaFlotando = false
-local ejecutandoImpulso = false
-local tiempoEnElAire = 0
-local sePuedeFlotarDeNuevo = true 
-local sePuedeUsarImpulso = true   
+-- --- ID OFICIAL DEL CATÁLOGO DE ROBLOX ---
+local ID_CATALOGO_OFICIAL = 18537367238 
 
--- CARGAR ANIMACIÓN
-local animacion = Instance.new("Animation")
-animacion.AnimationId = ID_ANIMACION
-local trackAnimacion = animator:LoadAnimation(animacion)
+-- --- INTERFAZ TÁCTIL PRINCIPAL ---
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MM2MovilPerfeccionado"
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+ScreenGui.ResetOnSpawn = false
 
--- CREACIÓN DE LA INTERFAZ DE USUARIO (GUI)
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ImpulsoGui"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = player:WaitForChild("PlayerGui")
+local RunButton = Instance.new("TextButton")
+RunButton.Parent = ScreenGui
+RunButton.Size = UDim2.new(0, 75, 0, 75)
+RunButton.Position = UDim2.new(0.80, 0, 0.55, 0) 
+RunButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+RunButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+RunButton.TextSize = 13
+RunButton.Text = "CORRER"
+RunButton.Font = Enum.Font.SourceSansBold
+RunButton.Active = true
+RunButton.Draggable = true
 
-local botonImpulso = Instance.new("TextButton")
-botonImpulso.Size = UDim2.new(0, 140, 0, 50)
-botonImpulso.Position = UDim2.new(0.5, -70, 0.85, -25) 
-botonImpulso.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-botonImpulso.Text = "IMPULSO"
-botonImpulso.TextColor3 = Color3.fromRGB(255, 255, 255)
-botonImpulso.Font = Enum.Font.SourceSansBold
-botonImpulso.TextSize = 20
-botonImpulso.BorderSizePixel = 0
-botonImpulso.Parent = screenGui
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 50)
+UICorner.Parent = RunButton
 
-local uiCorner = Instance.new("UICorner")
-uiCorner.CornerRadius = UDim.new(0, 12)
-uiCorner.Parent = botonImpulso
+-- --- INDICADOR APARTADO: CANDADO EMOJI ---
+local LockLabel = Instance.new("TextLabel")
+LockLabel.Parent = ScreenGui
+LockLabel.Size = UDim2.new(0, 24, 0, 24)
+LockLabel.BackgroundTransparency = 1
+LockLabel.Text = "🔒"
+LockLabel.TextSize = 18
+LockLabel.Visible = false 
 
-local textoCooldown = Instance.new("TextLabel")
-textoCooldown.Size = UDim2.new(1, 0, 1, 0)
-textoCooldown.BackgroundTransparency = 1
-textoCooldown.Text = ""
-textoCooldown.TextColor3 = Color3.fromRGB(255, 255, 255)
-textoCooldown.Font = Enum.Font.SourceSansBold
-textoCooldown.TextSize = 22
-textoCooldown.Parent = botonImpulso
-
--- FUNCIÓN ÚNICA PARA CREAR EL EFECTO REBOTE
-local function aplicarRebote(resultadoRaycast)
-	local attRebote = Instance.new("Attachment")
-	attRebote.Parent = rootPart
-
-	local fuerzaRebote = Instance.new("LinearVelocity")
-	fuerzaRebote.MaxForce = 80000
-	-- Dirección normal de la pared (hacia atrás) + mini salto vertical (18)
-	fuerzaRebote.VectorVelocity = (resultadoRaycast.Normal * 25) + Vector3.new(0, 18, 0)
-	fuerzaRebote.Attachment0 = attRebote
-	fuerzaRebote.Parent = rootPart
-
-	task.delay(0.2, function()
-		fuerzaRebote:Destroy()
-		attRebote:Destroy()
-	end)
-end
-
--- FUNCIÓN PARA LIMPIAR LA FÍSICA DE FLOTE
-local function detenerFlote()
-	if not estaFlotando then return end
-	estaFlotando = false
-	trackAnimacion:Stop()
-
-	local elementos = {"FuerzaFlote", "GiroFlote", "AttFlote"}
-	for _, nombre in ipairs(elementos) do
-		local elemento = rootPart:FindFirstChild(nombre)
-		if elemento then elemento:Destroy() end
+-- Sincronización continua de posición del candado en la pantalla
+RunService.RenderStepped:Connect(function()
+	if RunButton and LockLabel then
+		LockLabel.Position = UDim2.new(RunButton.Position.X.Scale, RunButton.Position.X.Offset + 50, RunButton.Position.Y.Scale, RunButton.Position.Y.Offset - 22)
 	end
+end)
 
-	sePuedeFlotarDeNuevo = false
-	task.delay(COOLDOWN_REPETIR_FLOTE, function()
-		sePuedeFlotarDeNuevo = true
-	end)
-end
+-- --- SISTEMA DE MOVIMIENTO REPARADO Y BUFERS ---
+local esSprinting = false
 
--- FUNCIÓN PRINCIPAL DE FLOTE
-local function empezarFlote()
-	if estaFlotando or not sePuedeFlotarDeNuevo then return end
-	estaFlotando = true
-	trackAnimacion:Play()
+local function configurarPersonaje(character)
+	local humanoid = character:WaitForChild("Humanoid")
+	humanoid.WalkSpeed = VELOCIDAD_CAMINAR
 
-	local attFlote = Instance.new("Attachment")
-	attFlote.Name = "AttFlote"
-	attFlote.Parent = rootPart
-
-	local fuerzaFlote = Instance.new("LinearVelocity")
-	fuerzaFlote.Name = "FuerzaFlote"
-	fuerzaFlote.MaxForce = 60000
-	fuerzaFlote.Attachment0 = attFlote
-	fuerzaFlote.Parent = rootPart
-
-	local giroFlote = Instance.new("AngularVelocity")
-	giroFlote.Name = "GiroFlote"
-	giroFlote.MaxTorque = 400000
-	giroFlote.Attachment0 = attFlote
-	giroFlote.Parent = rootPart
-
+	-- BUCLE OPTIMIZADO: ACELERACIÓN Y DESACELERACIÓN SUAVE (LERP)
 	task.spawn(function()
-		while estaFlotando and humanoid.FloorMaterial == Enum.Material.Air do
-			local direccionMover = humanoid.MoveDirection
-			if direccionMover.Magnitude == 0 then
-				direccionMover = rootPart.CFrame.LookVector
-			end
+		local factorSuavizadoMovimiento = 0.8 -- Controla la suavidad (Menor número = más suave/pesado)
 
-			fuerzaFlote.VectorVelocity = (direccionMover * 17.5) + Vector3.new(0, -4, 0)
+		while character and character.Parent and humanoid and humanoid.Health > 0 do
+			local velocidadObjetivo = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
 
-			local frenteActual = rootPart.CFrame.LookVector
-			local anguloGiro = frenteActual:Dot(direccionMover.Unit)
-			local vectorCruzado = frenteActual:Cross(direccionMover.Unit)
-
-			if direccionMover.Magnitude > 0 and anguloGiro < 0.999 then
-				local direccionGiro = vectorCruzado.Y > 0 and 1 or -1
-				giroFlote.AngularVelocity = Vector3.new(0, 4 * direccionGiro, 0)
+			-- Si la velocidad actual no es igual a la objetivo, la acercamos gradualmente
+			if math.abs(humanoid.WalkSpeed - velocidadObjetivo) > 0.05 then
+				-- Fórmula de interpolación para suavizar el cambio de velocidad
+				humanoid.WalkSpeed = humanoid.WalkSpeed + (velocidadObjetivo - humanoid.WalkSpeed) * factorSuavizadoMovimiento
 			else
-				giroFlote.AngularVelocity = Vector3.new(0, 0, 0)
+				humanoid.WalkSpeed = velocidadObjetivo
 			end
-
-			-- DETECCIÓN DE PAREDES EN FLOTE
-			local raycastParams = RaycastParams.new()
-			raycastParams.FilterDescendantsInstances = {character}
-			raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-
-			local resultadoRaycast = workspace:Raycast(rootPart.Position, direccionMover * 2.5, raycastParams)
-
-			if resultadoRaycast then
-				detenerFlote()
-				aplicarRebote(resultadoRaycast)
-				break
-			end
-			RunService.Heartbeat:Wait()
-		end
-
-		if estaFlotando then
-			detenerFlote()
+			task.wait(0.02) -- Frecuencia rápida para que la aceleración sea totalmente fluida
 		end
 	end)
+
+
+	local animateScript = character:WaitForChild("Animate", 5)
+	if animateScript then
+		pcall(function()
+			local idCaminataOriginal = animateScript.walk.WalkAnim.AnimationId
+			local idCarreraOriginal = animateScript.run.RunAnim.AnimationId
+
+			animateScript.walk.WalkAnim.AnimationId = idCarreraOriginal 
+			animateScript.run.RunAnim.AnimationId = idCaminataOriginal   
+		end)
+	end
 end
 
--- FUNCIÓN PARA EJECUTAR EL IMPULSO (CON DETECCIÓN DE PARED INCLUIDA)
-local function activarImpulso()
-	if not sePuedeUsarImpulso then return end
-	sePuedeUsarImpulso = false
-	ejecutandoImpulso = true
+-- Lógica táctil avanzada del botón (Click rápido vs Mantener presionado)
+local manteniendoBoton = false
+local botonFijadoEnPantalla = false
 
-	local attachment = Instance.new("Attachment")
-	attachment.Name = "AttImpulso"
-	attachment.Parent = rootPart
+RunButton.MouseButton1Down:Connect(function()
+	manteniendoBoton = true
+	local tiempoInicial = os.clock()
 
-	local linearVelocity = Instance.new("LinearVelocity")
-	linearVelocity.Name = "FuerzaImpulso"
-	linearVelocity.MaxForce = 50000
-	linearVelocity.VectorVelocity = (rootPart.CFrame.LookVector * 55) + Vector3.new(0, 45, 0)
-	linearVelocity.Attachment0 = attachment
-	linearVelocity.Parent = rootPart
-
-	-- Bucle rápido durante el impulso para detectar colisiones antes de que termine la fuerza
 	task.spawn(function()
-		local tiempoTranscurrido = 0
-		while ejecutandoImpulso and tiempoTranscurrido < 0.15 do
-			local raycastParams = RaycastParams.new()
-			raycastParams.FilterDescendantsInstances = {character}
-			raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-
-			-- Revisa al frente de la dirección hacia donde apunta el impulso
-			local resultadoRaycast = workspace:Raycast(rootPart.Position, rootPart.CFrame.LookVector * 2.5, raycastParams)
-
-			if resultadoRaycast then
-				ejecutandoImpulso = false
-				linearVelocity:Destroy()
-				attachment:Destroy()
-				aplicarRebote(resultadoRaycast) -- Ejecuta el mismo rebote
+		while manteniendoBoton do
+			if (os.clock() - tiempoInicial) >= 1.5 then
+				botonFijadoEnPantalla = not botonFijadoEnPantalla
+				RunButton.Draggable = not botonFijadoEnPantalla 
+				LockLabel.Visible = botonFijadoEnPantalla
+				manteniendoBoton = false
 				break
 			end
-
-			local dt = RunService.Heartbeat:Wait()
-			tiempoTranscurrido = tiempoTranscurrido + dt
-		end
-
-		-- Si no chocó, limpia las fuerzas de forma normal al terminar los 0.15s
-		if ejecutandoImpulso then
-			ejecutandoImpulso = false
-			linearVelocity:Destroy()
-			attachment:Destroy()
+			task.wait(0.1)
 		end
 	end)
+end)
 
-	-- Contador visual del cooldown en el botón
-	task.spawn(function()
-		botonImpulso.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
-		botonImpulso.Text = ""
-		for i = COOLDOWN_IMPULSO, 1, -1 do
-			textoCooldown.Text = tostring(i)
-			task.wait(1)
-		end
-		textoCooldown.Text = ""
-		botonImpulso.Text = "IMPULSO"
-		botonImpulso.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
-		sePuedeUsarImpulso = true
-	end)
-end
-
--- CONECTAR EL CLICK DEL BOTÓN
-botonImpulso.MouseButton1Click:Connect(activarImpulso)
-
--- DETECTAR ESPACIO EN EL AIRE
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-	if input.KeyCode == Enum.KeyCode.Space then
-		if humanoid.FloorMaterial == Enum.Material.Air and not estaFlotando and sePuedeFlotarDeNuevo then
-			if tiempoEnElAire >= TIEMPO_ESPERA_FLOTAR then
-				empezarFlote()
+RunButton.MouseButton1Up:Connect(function()
+	if manteniendoBoton then
+		manteniendoBoton = false
+		local character = LocalPlayer.Character
+		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			if not esSprinting then
+				esSprinting = true
+				humanoid.WalkSpeed = VELOCIDAD_CORRER
+				RunButton.BackgroundColor3 = Color3.fromRGB(230, 50, 50)
+				RunButton.Text = "RÁPIDO"
+			else
+				esSprinting = false
+				humanoid.WalkSpeed = VELOCIDAD_CAMINAR
+				RunButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+				RunButton.Text = "CORRER"
 			end
 		end
 	end
 end)
 
--- SEGUIMIENTO DEL TIEMPO EN EL AIRE
-RunService.Heartbeat:Connect(function(dt)
-	if humanoid.FloorMaterial == Enum.Material.Air then
-		tiempoEnElAire = tiempoEnElAire + dt
-	else
-		tiempoEnElAire = 0
-		if estaFlotando then
-			detenerFlote()
-		end
-	end
-end)
+-- --- CONTROLADOR DE CÁMARA ORIGINAL CON CONTROL DE SHIFT LOCK Y RÉPLICA ---
+local conexionCamara
 
--- RECONEXIÓN POR SI EL PERSONAJE MUERE O REAPARECE
-player.CharacterAdded:Connect(function(nuevoPersonaje)
-	character = nuevoPersonaje
-	humanoid = character:WaitForChild("Humanoid")
-	rootPart = character:WaitForChild("HumanoidRootPart")
-	animator = humanoid:WaitForChild("Animator")
-	trackAnimacion = animator:LoadAnimation(animacion)
-	estaFlotando = false
-	ejecutandoImpulso = false
-	sePuedeFlotarDeNuevo = true
+local function iniciarFisicasAvanzadas(character)
+	local torso = character:WaitForChild("UpperTorso", 5) or character:WaitForChild("Torso", 5)
+	local humanoid = character:WaitForChild("Humanoid")
+	local rootPart = character:WaitForChild("HumanoidRootPart")
+	if not torso or not humanoid or not rootPart then return end
+
+	Camera.CameraType = Enum.CameraType.Custom
+	Camera.CameraSubject = humanoid 
+
+	-- Carga de animación oficial mediante puente de réplica local
+	local animVoltereta = Instance.new("Animation")
+	animVoltereta.AnimationId = "rbxassetid://" .. tostring(ID_CATALOGO_OFICIAL)
+	local trackVoltereta = humanoid:LoadAnimation(animVoltereta)
+	trackVoltereta.Priority = Enum.AnimationPriority.Action4
+
+	if conexionCamara then conexionCamara:Disconnect() end
+
+	local factorSuavizadoNormal = 0.05 
+	local desfaseActual = Vector3.new(0, 0, 0)
+
+	local puntoMasAlto = rootPart.Position.Y
+	local enElAire = false
+	local ejecutandoVoltereta = false
+	local poderSaltoOriginal = humanoid.UseJumpPower and humanoid.JumpPower or humanoid.JumpHeight
+	local usaPoderOAltura = humanoid.UseJumpPower
+
+	conexionCamara = RunService.RenderStepped:Connect(function()
+		if not torso or not torso.Parent or not humanoid then
+			conexionCamara:Disconnect()
+			return
+		end
+
+		-- 1. DETECTOR DINÁMICO DE SHIFT LOCK (INMUNIDAD DE CÁMARA)
+		local shiftLockActivo = (UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter)
+
+		if shiftLockActivo then
+			humanoid.CameraOffset = Vector3.new(0, 0, 0)
+			desfaseActual = Vector3.new(0, 0, 0)
+		else
+			local velocidadTorso = torso.Velocity
+			local desfaseObjetivo = Vector3.new(0, 0, -velocidadTorso.Z) * 0.04
+
+			desfaseObjetivo = Vector3.new(math.clamp(0, -1.8, 1.8), 0, math.clamp(desfaseObjetivo.Z, -1.8, 1.8))
+			desfaseActual = desfaseActual:Lerp(desfaseObjetivo, factorSuavizadoNormal)
+			humanoid.CameraOffset = desfaseActual
+		end
+
+		-- 2. ESCÁNER LÁSER DETECTOR DE IMPACTOS (RAYCASTING)
+		local raycastParams = RaycastParams.new()
+		raycastParams.FilterDescendantsInstances = {character}
+		raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+
+		local resultadoRaycast = Workspace:Raycast(rootPart.Position, Vector3.new(0, -3.5, 0), raycastParams)
+
+		if not resultadoRaycast then
+			enElAire = true
+			if rootPart.Position.Y > puntoMasAlto then
+				puntoMasAlto = rootPart.Position.Y 
+			end
+		else
+			if enElAire and not ejecutandoVoltereta then
+				enElAire = false
+				local distanciaCaida = puntoMasAlto - rootPart.Position.Y
+
+				if distanciaCaida >= ALTURA_MINIMA_VOLTERETA then
+					ejecutandoVoltereta = true
+
+					-- BLOQUEAR EL SALTO TOTALMENTE
+					if usaPoderOAltura then
+						humanoid.JumpPower = 0
+					else
+						humanoid.JumpHeight = 0
+					end
+
+					trackVoltereta:Stop()
+					trackVoltereta:Play() 
+
+					local attachment = Instance.new("Attachment")
+					attachment.Parent = rootPart
+
+					local impulso = Instance.new("LinearVelocity")
+					impulso.Attachment0 = attachment
+					impulso.MaxForce = 35000 
+					impulso.VectorVelocity = (rootPart.CFrame.LookVector * Vector3.new(1, 0, 1)).Unit * 48
+					impulso.Parent = rootPart
+
+					task.spawn(function()
+						task.wait(0.25) 
+
+						impulso:Destroy()
+						attachment:Destroy()
+						trackVoltereta:Stop(0.1)
+
+						humanoid.WalkSpeed = 3
+						task.wait(0.25)
+
+						if usaPoderOAltura then
+							humanoid.JumpPower = poderSaltoOriginal
+						else
+							humanoid.JumpHeight = poderSaltoOriginal
+						end
+
+						humanoid.WalkSpeed = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
+						ejecutandoVoltereta = false
+					end)
+				end
+				puntoMasAlto = rootPart.Position.Y
+			elseif not enElAire then
+				puntoMasAlto = rootPart.Position.Y
+			end
+		end
+	end)
+end
+
+if LocalPlayer.Character then
+	configurarPersonaje(LocalPlayer.Character)
+	iniciarFisicasAvanzadas(LocalPlayer.Character)
+end
+
+LocalPlayer.CharacterAdded:Connect(function(nuevoChar)
+	configurarPersonaje(nuevoChar)
+	iniciarFisicasAvanzadas(nuevoChar)
 end)
