@@ -11,7 +11,7 @@ local rootPart = character:WaitForChild("HumanoidRootPart")
 local animator = humanoid:WaitForChild("Animator")
 
 -- CONFIGURACIÓN
-local TIEMPO_ESPERA_FLOTAR = 0.15   -- Tiempo mínimo cayendo para poder activar el flote
+local TIEMPO_ESPERA_FLOTAR = 0.355   -- Tiempo mínimo cayendo para poder activar el flote
 local COOLDOWN_REPETIR_FLOTE = 1.5 -- Cooldown invisible SOLO tras terminar el flote
 local COOLDOWN_IMPULSO = 20        -- Tiempo de espera para volver a usar el impulso
 local ID_ANIMACION = "rbxassetid://114731495347458"
@@ -30,7 +30,7 @@ local successAnim, trackAnimacion = pcall(function()
 	return animator:LoadAnimation(animacion)
 end)
 
--- CREACIÓN DE LA INTERFAZ DE USUARIO (GUI)
+-- CREACIÓN DE LA INTERFAZ DE USUARIO (GUI) - Compatible con Celulares
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "ImpulsoGui"
 screenGui.ResetOnSpawn = false
@@ -81,7 +81,7 @@ end
 local function detenerFlote()
 	if not estaFlotando then return end
 	estaFlotando = false
-	
+
 	if successAnim and trackAnimacion then
 		trackAnimacion:Stop()
 	end
@@ -102,7 +102,7 @@ end
 local function empezarFlote()
 	if estaFlotando or not sePuedeFlotarDeNuevo then return end
 	estaFlotando = true
-	
+
 	if successAnim and trackAnimacion then
 		trackAnimacion:Play()
 	end
@@ -223,19 +223,16 @@ local function activarImpulso()
 	end)
 end
 
+-- El evento MouseButton1Click funciona tanto para clicks como para toques táctiles
 botonImpulso.MouseButton1Click:Connect(activarImpulso)
 
--- DETECTAR ESPACIO EN EL AIRE (Corregido para otros juegos)
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	-- Quitamos el "if gameProcessed then return end" para asegurar que detecte el Espacio siempre
-	if input.KeyCode == Enum.KeyCode.Space then
-		-- Verificación doble del estado del aire (por si el juego altera el FloorMaterial)
-		local enElAire = (humanoid.FloorMaterial == Enum.Material.Air) or (humanoid:GetState() == Enum.HumanoidStateType.Freefall)
-		
-		if enElAire and not estaFlotando and sePuedeFlotarDeNuevo then
-			if tiempoEnElAire >= TIEMPO_ESPERA_FLOTAR then
-				empezarFlote()
-			end
+-- DETECTAR INTENTO DE SALTO (Universal: PC, Celular y Consola)
+UserInputService.JumpRequest:Connect(function()
+	local enElAire = (humanoid.FloorMaterial == Enum.Material.Air) or (humanoid:GetState() == Enum.HumanoidStateType.Freefall)
+
+	if enElAire and not estaFlotando and sePuedeFlotarDeNuevo then
+		if tiempoEnElAire >= TIEMPO_ESPERA_FLOTAR then
+			empezarFlote()
 		end
 	end
 end)
@@ -243,7 +240,7 @@ end)
 -- SEGUIMIENTO DEL TIEMPO EN EL AIRE
 RunService.Heartbeat:Connect(function(dt)
 	local enElAire = (humanoid.FloorMaterial == Enum.Material.Air) or (humanoid:GetState() == Enum.HumanoidStateType.Freefall)
-	
+
 	if enElAire then
 		tiempoEnElAire = tiempoEnElAire + dt
 	else
@@ -260,11 +257,11 @@ player.CharacterAdded:Connect(function(nuevoPersonaje)
 	humanoid = character:WaitForChild("Humanoid")
 	rootPart = character:WaitForChild("HumanoidRootPart")
 	animator = humanoid:WaitForChild("Animator")
-	
+
 	successAnim, trackAnimacion = pcall(function()
 		return animator:LoadAnimation(animacion)
 	end)
-	
+
 	estaFlotando = false
 	ejecutandoImpulso = false
 	sePuedeFlotarDeNuevo = true
