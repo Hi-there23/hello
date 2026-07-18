@@ -169,7 +169,7 @@ local ultimoIntentoSalto = 0 -- Debounce para evitar activaciones dobles rápida
 
 UserInputService.JumpRequest:Connect(function()
 	-- Evitamos que el vuelo se encienda y apague rápidamente si mantienen presionado el botón
-	if os.clock() - ultimoIntentoSalto < 0.3 then return end
+	if os.clock() - ultimoIntentoSalto < 0.1 then return end
 	ultimoIntentoSalto = os.clock()
 
 	local character = player.Character
