@@ -11,9 +11,9 @@ local rootPart = character:WaitForChild("HumanoidRootPart")
 local animator = humanoid:WaitForChild("Animator")
 
 -- CONFIGURACIÓN
-local TIEMPO_ESPERA_FLOTAR = 0.15   -- Tiempo mínimo cayendo para poder activar el flote
+local TIEMPO_ESPERA_FLOTAR = 0.355   -- Tiempo mínimo cayendo para poder activar el flote
 local COOLDOWN_REPETIR_FLOTE = 1.5 -- Cooldown invisible SOLO tras terminar el flote
-local COOLDOWN_IMPULSO = 22        -- Tiempo de espera para volver a usar el impulso
+local COOLDOWN_IMPULSO = 20        -- Tiempo de espera para volver a usar el impulso
 local ID_ANIMACION = "rbxassetid://114731495347458"
 
 -- ESTADOS
@@ -23,10 +23,12 @@ local tiempoEnElAire = 0
 local sePuedeFlotarDeNuevo = true 
 local sePuedeUsarImpulso = true   
 
--- CARGAR ANIMACIÓN
+-- CARGAR ANIMACIÓN (Protegido por si el juego la bloquea)
 local animacion = Instance.new("Animation")
 animacion.AnimationId = ID_ANIMACION
-local trackAnimacion = animator:LoadAnimation(animacion)
+local successAnim, trackAnimacion = pcall(function()
+	return animator:LoadAnimation(animacion)
+end)
 
 -- CREACIÓN DE LA INTERFAZ DE USUARIO (GUI)
 local screenGui = Instance.new("ScreenGui")
@@ -65,7 +67,6 @@ local function aplicarRebote(resultadoRaycast)
 
 	local fuerzaRebote = Instance.new("LinearVelocity")
 	fuerzaRebote.MaxForce = 80000
-	-- Dirección normal de la pared (hacia atrás) + mini salto vertical (18)
 	fuerzaRebote.VectorVelocity = (resultadoRaycast.Normal * 25) + Vector3.new(0, 18, 0)
 	fuerzaRebote.Attachment0 = attRebote
 	fuerzaRebote.Parent = rootPart
@@ -80,7 +81,10 @@ end
 local function detenerFlote()
 	if not estaFlotando then return end
 	estaFlotando = false
-	trackAnimacion:Stop()
+	
+	if successAnim and trackAnimacion then
+		trackAnimacion:Stop()
+	end
 
 	local elementos = {"FuerzaFlote", "GiroFlote", "AttFlote"}
 	for _, nombre in ipairs(elementos) do
@@ -98,7 +102,10 @@ end
 local function empezarFlote()
 	if estaFlotando or not sePuedeFlotarDeNuevo then return end
 	estaFlotando = true
-	trackAnimacion:Play()
+	
+	if successAnim and trackAnimacion then
+		trackAnimacion:Play()
+	end
 
 	local attFlote = Instance.new("Attachment")
 	attFlote.Name = "AttFlote"
@@ -117,7 +124,7 @@ local function empezarFlote()
 	giroFlote.Parent = rootPart
 
 	task.spawn(function()
-		while estaFlotando and humanoid.FloorMaterial == Enum.Material.Air do
+		while estaFlotando and (humanoid.FloorMaterial == Enum.Material.Air or humanoid:GetState() == Enum.HumanoidStateType.Freefall) do
 			local direccionMover = humanoid.MoveDirection
 			if direccionMover.Magnitude == 0 then
 				direccionMover = rootPart.CFrame.LookVector
@@ -157,7 +164,7 @@ local function empezarFlote()
 	end)
 end
 
--- FUNCIÓN PARA EJECUTAR EL IMPULSO (CON DETECCIÓN DE PARED INCLUIDA)
+-- FUNCIÓN PARA EJECUTAR EL IMPULSO
 local function activarImpulso()
 	if not sePuedeUsarImpulso then return end
 	sePuedeUsarImpulso = false
@@ -174,7 +181,6 @@ local function activarImpulso()
 	linearVelocity.Attachment0 = attachment
 	linearVelocity.Parent = rootPart
 
-	-- Bucle rápido durante el impulso para detectar colisiones antes de que termine la fuerza
 	task.spawn(function()
 		local tiempoTranscurrido = 0
 		while ejecutandoImpulso and tiempoTranscurrido < 0.15 do
@@ -182,14 +188,13 @@ local function activarImpulso()
 			raycastParams.FilterDescendantsInstances = {character}
 			raycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
-			-- Revisa al frente de la dirección hacia donde apunta el impulso
 			local resultadoRaycast = workspace:Raycast(rootPart.Position, rootPart.CFrame.LookVector * 2.5, raycastParams)
 
 			if resultadoRaycast then
 				ejecutandoImpulso = false
 				linearVelocity:Destroy()
 				attachment:Destroy()
-				aplicarRebote(resultadoRaycast) -- Ejecuta el mismo rebote
+				aplicarRebote(resultadoRaycast)
 				break
 			end
 
@@ -197,7 +202,6 @@ local function activarImpulso()
 			tiempoTranscurrido = tiempoTranscurrido + dt
 		end
 
-		-- Si no chocó, limpia las fuerzas de forma normal al terminar los 0.15s
 		if ejecutandoImpulso then
 			ejecutandoImpulso = false
 			linearVelocity:Destroy()
@@ -205,7 +209,6 @@ local function activarImpulso()
 		end
 	end)
 
-	-- Contador visual del cooldown en el botón
 	task.spawn(function()
 		botonImpulso.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
 		botonImpulso.Text = ""
@@ -220,14 +223,16 @@ local function activarImpulso()
 	end)
 end
 
--- CONECTAR EL CLICK DEL BOTÓN
 botonImpulso.MouseButton1Click:Connect(activarImpulso)
 
--- DETECTAR ESPACIO EN EL AIRE
+-- DETECTAR ESPACIO EN EL AIRE (Corregido para otros juegos)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
+	-- Quitamos el "if gameProcessed then return end" para asegurar que detecte el Espacio siempre
 	if input.KeyCode == Enum.KeyCode.Space then
-		if humanoid.FloorMaterial == Enum.Material.Air and not estaFlotando and sePuedeFlotarDeNuevo then
+		-- Verificación doble del estado del aire (por si el juego altera el FloorMaterial)
+		local enElAire = (humanoid.FloorMaterial == Enum.Material.Air) or (humanoid:GetState() == Enum.HumanoidStateType.Freefall)
+		
+		if enElAire and not estaFlotando and sePuedeFlotarDeNuevo then
 			if tiempoEnElAire >= TIEMPO_ESPERA_FLOTAR then
 				empezarFlote()
 			end
@@ -237,7 +242,9 @@ end)
 
 -- SEGUIMIENTO DEL TIEMPO EN EL AIRE
 RunService.Heartbeat:Connect(function(dt)
-	if humanoid.FloorMaterial == Enum.Material.Air then
+	local enElAire = (humanoid.FloorMaterial == Enum.Material.Air) or (humanoid:GetState() == Enum.HumanoidStateType.Freefall)
+	
+	if enElAire then
 		tiempoEnElAire = tiempoEnElAire + dt
 	else
 		tiempoEnElAire = 0
@@ -247,13 +254,17 @@ RunService.Heartbeat:Connect(function(dt)
 	end
 end)
 
--- RECONEXIÓN POR SI EL PERSONAJE MUERE O REAPARECE
+-- RECONEXIÓN POR SI EL PERSONAJE MUERE
 player.CharacterAdded:Connect(function(nuevoPersonaje)
 	character = nuevoPersonaje
 	humanoid = character:WaitForChild("Humanoid")
 	rootPart = character:WaitForChild("HumanoidRootPart")
 	animator = humanoid:WaitForChild("Animator")
-	trackAnimacion = animator:LoadAnimation(animacion)
+	
+	successAnim, trackAnimacion = pcall(function()
+		return animator:LoadAnimation(animacion)
+	end)
+	
 	estaFlotando = false
 	ejecutandoImpulso = false
 	sePuedeFlotarDeNuevo = true
