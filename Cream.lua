@@ -11,7 +11,7 @@ local rootPart = character:WaitForChild("HumanoidRootPart")
 local animator = humanoid:WaitForChild("Animator")
 
 -- CONFIGURACIÓN
-local TIEMPO_ESPERA_FLOTAR = 0.355   -- Tiempo mínimo cayendo para poder activar el flote
+local TIEMPO_ESPERA_FLOTAR = 0.15   -- Tiempo mínimo cayendo para poder activar el flote
 local COOLDOWN_REPETIR_FLOTE = 1.5 -- Cooldown invisible SOLO tras terminar el flote
 local COOLDOWN_IMPULSO = 20        -- Tiempo de espera para volver a usar el impulso
 local ID_ANIMACION = "rbxassetid://114731495347458"
