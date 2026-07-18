@@ -1,265 +1,384 @@
--- ====================================================================
--- SCRIPT COMPLETO DEFINITIVO: MÁXIMA EXTENSIÓN, RÉPLICA Y TODAS LAS FUNCIONES
--- ====================================================================
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
-local LocalPlayer = Players.LocalPlayer
-local Camera = Workspace.CurrentCamera
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local camera = Workspace.CurrentCamera
 
--- --- CONFIGURACIÓN DE PARÁMETROS SOLICITADOS ---
-local VELOCIDAD_CAMINAR = 5
-local VELOCIDAD_CORRER = 18.5
-local ALTURA_MINIMA_VOLTERETA = 25.5 
+local PlayerModule = require(player:WaitForChild("PlayerScripts"):WaitForChild("PlayerModule"))
+local Controls = PlayerModule:GetControls()
 
--- --- ID OFICIAL DEL CATÁLOGO DE ROBLOX ---
-local ID_CATALOGO_OFICIAL = 18537367238 
+-- ==========================================
+-- 1. CREACIÓN DE LA INTERFAZ (GUI)
+-- ==========================================
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "HabilidadesGUI"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
 
--- --- INTERFAZ TÁCTIL PRINCIPAL ---
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "MM2MovilPerfeccionado"
-ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-ScreenGui.ResetOnSpawn = false
+local frame = Instance.new("Frame")
+frame.Name = "MainFrame"
+frame.Size = UDim2.new(0, 100, 0, 50)
+frame.Position = UDim2.new(0.5, -50, 0.8, 0)
+frame.BackgroundTransparency = 1
+frame.Parent = screenGui
 
-local RunButton = Instance.new("TextButton")
-RunButton.Parent = ScreenGui
-RunButton.Size = UDim2.new(0, 75, 0, 75)
-RunButton.Position = UDim2.new(0.80, 0, 0.55, 0) 
-RunButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-RunButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-RunButton.TextSize = 13
-RunButton.Text = "CORRER"
-RunButton.Font = Enum.Font.SourceSansBold
-RunButton.Active = true
-RunButton.Draggable = true
+local function crearBoton(nombre, texto, posicion)
+	local btn = Instance.new("TextButton")
+	btn.Name = nombre
+	btn.Text = texto
+	btn.Size = UDim2.new(1, 0, 1, 0)
+	btn.Position = posicion
+	btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Font = Enum.Font.SourceSansBold
+	btn.TextSize = 18
+	btn.Parent = frame
+	return btn
+end
 
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 50)
-UICorner.Parent = RunButton
+local chaosDashBtn = crearBoton("ChaosDashButton", "Chaos Dash", UDim2.new(0, 0, 0, 0))
 
--- --- INDICADOR APARTADO: CANDADO EMOJI ---
-local LockLabel = Instance.new("TextLabel")
-LockLabel.Parent = ScreenGui
-LockLabel.Size = UDim2.new(0, 24, 0, 24)
-LockLabel.BackgroundTransparency = 1
-LockLabel.Text = "🔒"
-LockLabel.TextSize = 18
-LockLabel.Visible = false 
+local barraVueloBg = Instance.new("Frame")
+barraVueloBg.Name = "BarraVueloBg"
+barraVueloBg.Size = UDim2.new(0, 200, 0, 15)
+barraVueloBg.Position = UDim2.new(0.5, -100, 0.85, 0)
+barraVueloBg.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+barraVueloBg.BorderSizePixel = 2
+barraVueloBg.BorderColor3 = Color3.fromRGB(0, 0, 0)
+barraVueloBg.BackgroundTransparency = 1 
+barraVueloBg.Parent = screenGui
 
--- Sincronización continua de posición del candado en la pantalla
-RunService.RenderStepped:Connect(function()
-	if RunButton and LockLabel then
-		LockLabel.Position = UDim2.new(RunButton.Position.X.Scale, RunButton.Position.X.Offset + 50, RunButton.Position.Y.Scale, RunButton.Position.Y.Offset - 22)
-	end
+local barraVueloFill = Instance.new("Frame")
+barraVueloFill.Name = "BarraVueloFill"
+barraVueloFill.Size = UDim2.new(1, 0, 1, 0)
+barraVueloFill.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+barraVueloFill.BorderSizePixel = 0
+barraVueloFill.BackgroundTransparency = 1 
+barraVueloFill.Parent = barraVueloBg
+
+
+-- ==========================================
+-- 2. VARIABLES GLOBALES Y UTILIDADES
+-- ==========================================
+local isHabilidadActiva = false 
+local chaosDashEnCooldown = false
+
+local CHAOS_ANIM_ID = "http://www.roblox.com/asset/?id=18537367238" 
+
+player.CharacterAdded:Connect(function()
+	isHabilidadActiva = false
 end)
 
--- --- SISTEMA DE MOVIMIENTO REPARADO Y BUFERS ---
-local esSprinting = false
-
-local function configurarPersonaje(character)
-	local humanoid = character:WaitForChild("Humanoid")
-	humanoid.WalkSpeed = VELOCIDAD_CAMINAR
-
-	-- BUCLE OPTIMIZADO: ACELERACIÓN Y DESACELERACIÓN SUAVE (LERP)
+local function manejarCooldown(boton, tiempo, textoOriginal)
 	task.spawn(function()
-		local factorSuavizadoMovimiento = 0.8 -- Controla la suavidad (Menor número = más suave/pesado)
-
-		while character and character.Parent and humanoid and humanoid.Health > 0 do
-			local velocidadObjetivo = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
-
-			-- Si la velocidad actual no es igual a la objetivo, la acercamos gradualmente
-			if math.abs(humanoid.WalkSpeed - velocidadObjetivo) > 0.05 then
-				-- Fórmula de interpolación para suavizar el cambio de velocidad
-				humanoid.WalkSpeed = humanoid.WalkSpeed + (velocidadObjetivo - humanoid.WalkSpeed) * factorSuavizadoMovimiento
-			else
-				humanoid.WalkSpeed = velocidadObjetivo
-			end
-			task.wait(0.02) -- Frecuencia rápida para que la aceleración sea totalmente fluida
+		for i = tiempo, 1, -1 do
+			boton.Text = tostring(i)
+			task.wait(1)
 		end
+		boton.Text = textoOriginal
+		chaosDashEnCooldown = false
 	end)
+end
 
+-- ==========================================
+-- 3. LÓGICA DEL VUELO LIBRE (TOGGLE)
+-- ==========================================
+local isVolando = false
+local energiaVueloMax = 150
+local energiaVueloActual = 150
 
-	local animateScript = character:WaitForChild("Animate", 5)
-	if animateScript then
-		pcall(function()
-			local idCaminataOriginal = animateScript.walk.WalkAnim.AnimationId
-			local idCarreraOriginal = animateScript.run.RunAnim.AnimationId
+local regenPorSegundo = 2 
+local velocidadVueloLibre = 55 
+local tiempoSinVolar = 0 
+local finCooldownVuelo = 0 -- Variable para controlar los 7 segundos de castigo
 
-			animateScript.walk.WalkAnim.AnimationId = idCarreraOriginal 
-			animateScript.run.RunAnim.AnimationId = idCaminataOriginal   
-		end)
+local isBarraVisible = false
+local tweenInfoFade = TweenInfo.new(0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+
+local function actualizarFadeBarra(mostrar)
+	if mostrar and not isBarraVisible then
+		isBarraVisible = true
+		TweenService:Create(barraVueloBg, tweenInfoFade, {BackgroundTransparency = 0}):Play()
+		TweenService:Create(barraVueloBg, tweenInfoFade, {BorderColor3 = Color3.fromRGB(0, 0, 0)}):Play()
+		TweenService:Create(barraVueloFill, tweenInfoFade, {BackgroundTransparency = 0}):Play()
+	elseif not mostrar and isBarraVisible then
+		isBarraVisible = false
+		TweenService:Create(barraVueloBg, tweenInfoFade, {BackgroundTransparency = 1}):Play()
+		TweenService:Create(barraVueloBg, tweenInfoFade, {BorderColor3 = Color3.fromRGB(20, 20, 20)}):Play()
+		TweenService:Create(barraVueloFill, tweenInfoFade, {BackgroundTransparency = 1}):Play()
 	end
 end
 
--- Lógica táctil avanzada del botón (Click rápido vs Mantener presionado)
-local manteniendoBoton = false
-local botonFijadoEnPantalla = false
+local function empezarVueloNormal(rootPart, humanoid)
+	-- Bloqueamos el inicio del vuelo si está en cooldown de agotamiento
+	if isVolando or energiaVueloActual <= 0 or isHabilidadActiva or os.clock() < finCooldownVuelo then return end
 
-RunButton.MouseButton1Down:Connect(function()
-	manteniendoBoton = true
-	local tiempoInicial = os.clock()
+	isVolando = true
+	tiempoSinVolar = 0
 
-	task.spawn(function()
-		while manteniendoBoton do
-			if (os.clock() - tiempoInicial) >= 1.5 then
-				botonFijadoEnPantalla = not botonFijadoEnPantalla
-				RunButton.Draggable = not botonFijadoEnPantalla 
-				LockLabel.Visible = botonFijadoEnPantalla
-				manteniendoBoton = false
-				break
-			end
-			task.wait(0.1)
-		end
-	end)
-end)
+	humanoid:ChangeState(Enum.HumanoidStateType.Physics)
 
-RunButton.MouseButton1Up:Connect(function()
-	if manteniendoBoton then
-		manteniendoBoton = false
-		local character = LocalPlayer.Character
-		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		if humanoid then
-			if not esSprinting then
-				esSprinting = true
-				humanoid.WalkSpeed = VELOCIDAD_CORRER
-				RunButton.BackgroundColor3 = Color3.fromRGB(230, 50, 50)
-				RunButton.Text = "RÁPIDO"
-			else
-				esSprinting = false
-				humanoid.WalkSpeed = VELOCIDAD_CAMINAR
-				RunButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-				RunButton.Text = "CORRER"
-			end
-		end
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "VueloNormalAtt"
+	attachment.Parent = rootPart
+
+	local linearVelocity = Instance.new("LinearVelocity")
+	linearVelocity.Name = "VueloNormalVel"
+	linearVelocity.Attachment0 = attachment
+	linearVelocity.ForceLimitMode = Enum.ForceLimitMode.PerAxis
+	linearVelocity.MaxAxesForce = Vector3.new(100000, 100000, 100000) 
+	linearVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
+	linearVelocity.VectorVelocity = rootPart.AssemblyLinearVelocity 
+	linearVelocity.Parent = rootPart
+
+	local alignOrientation = Instance.new("AlignOrientation")
+	alignOrientation.Name = "VueloNormalGyro"
+	alignOrientation.Mode = Enum.OrientationAlignmentMode.OneAttachment
+	alignOrientation.Attachment0 = attachment
+	alignOrientation.MaxTorque = 100000
+	alignOrientation.Responsiveness = 80 
+	alignOrientation.Parent = rootPart
+end
+
+local function terminarVueloNormal(rootPart, humanoid)
+	if not isVolando then return end
+	isVolando = false
+
+	if rootPart then
+		local att = rootPart:FindFirstChild("VueloNormalAtt")
+		if att then att:Destroy() end
+		local vel = rootPart:FindFirstChild("VueloNormalVel")
+		if vel then vel:Destroy() end
+		local gyro = rootPart:FindFirstChild("VueloNormalGyro")
+		if gyro then gyro:Destroy() end
 	end
-end)
 
--- --- CONTROLADOR DE CÁMARA ORIGINAL CON CONTROL DE SHIFT LOCK Y RÉPLICA ---
-local conexionCamara
+	if humanoid and humanoid.Health > 0 then
+		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+	end
+end
 
-local function iniciarFisicasAvanzadas(character)
-	local torso = character:WaitForChild("UpperTorso", 5) or character:WaitForChild("Torso", 5)
-	local humanoid = character:WaitForChild("Humanoid")
-	local rootPart = character:WaitForChild("HumanoidRootPart")
-	if not torso or not humanoid or not rootPart then return end
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.Space then
+		local character = player.Character
+		if character then
+			local humanoid = character:FindFirstChildOfClass("Humanoid")
+			local rootPart = character:FindFirstChild("HumanoidRootPart")
 
-	Camera.CameraType = Enum.CameraType.Custom
-	Camera.CameraSubject = humanoid 
-
-	-- Carga de animación oficial mediante puente de réplica local
-	local animVoltereta = Instance.new("Animation")
-	animVoltereta.AnimationId = "rbxassetid://" .. tostring(ID_CATALOGO_OFICIAL)
-	local trackVoltereta = humanoid:LoadAnimation(animVoltereta)
-	trackVoltereta.Priority = Enum.AnimationPriority.Action4
-
-	if conexionCamara then conexionCamara:Disconnect() end
-
-	local factorSuavizadoNormal = 0.05 
-	local desfaseActual = Vector3.new(0, 0, 0)
-
-	local puntoMasAlto = rootPart.Position.Y
-	local enElAire = false
-	local ejecutandoVoltereta = false
-	local poderSaltoOriginal = humanoid.UseJumpPower and humanoid.JumpPower or humanoid.JumpHeight
-	local usaPoderOAltura = humanoid.UseJumpPower
-
-	conexionCamara = RunService.RenderStepped:Connect(function()
-		if not torso or not torso.Parent or not humanoid then
-			conexionCamara:Disconnect()
-			return
-		end
-
-		-- 1. DETECTOR DINÁMICO DE SHIFT LOCK (INMUNIDAD DE CÁMARA)
-		local shiftLockActivo = (UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter)
-
-		if shiftLockActivo then
-			humanoid.CameraOffset = Vector3.new(0, 0, 0)
-			desfaseActual = Vector3.new(0, 0, 0)
-		else
-			local velocidadTorso = torso.Velocity
-			local desfaseObjetivo = Vector3.new(0, 0, -velocidadTorso.Z) * 0.04
-
-			desfaseObjetivo = Vector3.new(math.clamp(0, -1.8, 1.8), 0, math.clamp(desfaseObjetivo.Z, -1.8, 1.8))
-			desfaseActual = desfaseActual:Lerp(desfaseObjetivo, factorSuavizadoNormal)
-			humanoid.CameraOffset = desfaseActual
-		end
-
-		-- 2. ESCÁNER LÁSER DETECTOR DE IMPACTOS (RAYCASTING)
-		local raycastParams = RaycastParams.new()
-		raycastParams.FilterDescendantsInstances = {character}
-		raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-
-		local resultadoRaycast = Workspace:Raycast(rootPart.Position, Vector3.new(0, -3.5, 0), raycastParams)
-
-		if not resultadoRaycast then
-			enElAire = true
-			if rootPart.Position.Y > puntoMasAlto then
-				puntoMasAlto = rootPart.Position.Y 
-			end
-		else
-			if enElAire and not ejecutandoVoltereta then
-				enElAire = false
-				local distanciaCaida = puntoMasAlto - rootPart.Position.Y
-
-				if distanciaCaida >= ALTURA_MINIMA_VOLTERETA then
-					ejecutandoVoltereta = true
-
-					-- BLOQUEAR EL SALTO TOTALMENTE
-					if usaPoderOAltura then
-						humanoid.JumpPower = 0
-					else
-						humanoid.JumpHeight = 0
-					end
-
-					trackVoltereta:Stop()
-					trackVoltereta:Play() 
-
-					local attachment = Instance.new("Attachment")
-					attachment.Parent = rootPart
-
-					local impulso = Instance.new("LinearVelocity")
-					impulso.Attachment0 = attachment
-					impulso.MaxForce = 35000 
-					impulso.VectorVelocity = (rootPart.CFrame.LookVector * Vector3.new(1, 0, 1)).Unit * 48
-					impulso.Parent = rootPart
-
-					task.spawn(function()
-						task.wait(0.25) 
-
-						impulso:Destroy()
-						attachment:Destroy()
-						trackVoltereta:Stop(0.1)
-
-						humanoid.WalkSpeed = 3
-						task.wait(0.25)
-
-						if usaPoderOAltura then
-							humanoid.JumpPower = poderSaltoOriginal
-						else
-							humanoid.JumpHeight = poderSaltoOriginal
-						end
-
-						humanoid.WalkSpeed = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
-						ejecutandoVoltereta = false
-					end)
+			if humanoid and rootPart and humanoid.Health > 0 then
+				if isVolando then
+					terminarVueloNormal(rootPart, humanoid)
+				elseif humanoid.FloorMaterial == Enum.Material.Air and not isHabilidadActiva then
+					empezarVueloNormal(rootPart, humanoid)
 				end
-				puntoMasAlto = rootPart.Position.Y
-			elseif not enElAire then
-				puntoMasAlto = rootPart.Position.Y
 			end
 		end
+	end
+end)
+
+
+-- ==========================================
+-- 4. BUCLE PRINCIPAL (MANEJO DE ENERGÍA Y VUELO LIBRE)
+-- ==========================================
+RunService.RenderStepped:Connect(function(deltaTime)
+	local character = player.Character
+	if not character then return end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not rootPart then return end
+
+	-- 1. Manejo de Energía y Físicas
+	if isVolando then
+		tiempoSinVolar = 0
+
+		local vel = rootPart:FindFirstChild("VueloNormalVel")
+		local gyro = rootPart:FindFirstChild("VueloNormalGyro")
+
+		if vel and gyro then
+			local moveVector = Controls:GetMoveVector()
+			local direccionDeseada = (camera.CFrame.RightVector * moveVector.X) + (camera.CFrame.LookVector * -moveVector.Z)
+
+			local seEstaMoviendo = direccionDeseada.Magnitude > 0.01
+
+			if seEstaMoviendo then
+				direccionDeseada = direccionDeseada.Unit
+			end
+
+			local gastoActual = seEstaMoviendo and 15 or 5
+			energiaVueloActual = math.max(0, energiaVueloActual - (gastoActual * deltaTime))
+
+			-- Si se acaba la energía, aplicamos los 7 segundos de cooldown
+			if energiaVueloActual <= 0 then
+				finCooldownVuelo = os.clock() + 7
+				terminarVueloNormal(rootPart, humanoid)
+			end
+
+			vel.VectorVelocity = vel.VectorVelocity:Lerp(direccionDeseada * velocidadVueloLibre, 0.1)
+
+			if seEstaMoviendo then
+				gyro.CFrame = CFrame.lookAt(Vector3.zero, direccionDeseada)
+			else
+				local lookActual = gyro.CFrame.LookVector
+				local lookPlano = Vector3.new(lookActual.X, 0, lookActual.Z)
+				if lookPlano.Magnitude > 0.01 then
+					gyro.CFrame = CFrame.lookAt(Vector3.zero, lookPlano.Unit)
+				end
+			end
+		end
+	else
+		-- Verificamos si ya pasaron los 7 segundos de castigo
+		if os.clock() >= finCooldownVuelo then
+			tiempoSinVolar = tiempoSinVolar + deltaTime
+			if energiaVueloActual < energiaVueloMax then
+				energiaVueloActual = math.min(energiaVueloMax, energiaVueloActual + (regenPorSegundo * deltaTime))
+			end
+		else
+			-- Mantenemos tiempoSinVolar en 0 para que la barra no desaparezca mientras está vacía
+			tiempoSinVolar = 0 
+		end
+	end
+
+	-- 2. Visuales de la Barra (Lerp y Fade por inactividad)
+	local porcentajeEnergia = energiaVueloActual / energiaVueloMax
+	barraVueloFill.Size = barraVueloFill.Size:Lerp(UDim2.new(porcentajeEnergia, 0, 1, 0), 0.15)
+
+	if tiempoSinVolar < 2 then
+		actualizarFadeBarra(true)
+	else
+		actualizarFadeBarra(false)
+	end
+end)
+
+
+-- ==========================================
+-- 5. LÓGICA DEL CHAOS DASH
+-- ==========================================
+local isChaosDashing = false
+
+local tiempoCarga = 1.5 
+local velocidadRetroceso = 7.9 
+local velocidadImpulsoMax = 550 
+local velocidadImpulsoMin = 230 
+local tiempoVuelo = 5.8 
+local tiempoCooldown = 35 
+local velocidadLerp = 0.08 
+
+chaosDashBtn.MouseButton1Click:Connect(function()
+	if isHabilidadActiva or chaosDashEnCooldown then return end
+
+	local character = player.Character
+	if not character then return end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if not humanoid or not rootPart or humanoid.Health <= 0 then return end
+
+	if isVolando then
+		terminarVueloNormal(rootPart, humanoid)
+	end
+
+	isHabilidadActiva = true
+	isChaosDashing = true
+
+	local renderSteppedConnection
+	local animTrack
+	local deathConnection
+	local faseActual = "carga" 
+	local inicioVuelo = 0 
+
+	local cframeActual = rootPart.CFrame 
+
+	local function finalizarChaosDash()
+		if not isChaosDashing then return end
+
+		isChaosDashing = false
+		isHabilidadActiva = false 
+
+		if renderSteppedConnection then renderSteppedConnection:Disconnect() end
+		if animTrack then animTrack:Stop() end
+		if deathConnection then deathConnection:Disconnect() end
+
+		if rootPart then
+			local att = rootPart:FindFirstChild("ChaosDashAtt")
+			if att then att:Destroy() end
+			local vel = rootPart:FindFirstChild("ChaosDashVel")
+			if vel then vel:Destroy() end
+			local gyro = rootPart:FindFirstChild("ChaosDashGyro")
+			if gyro then gyro:Destroy() end
+		end
+
+		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+		chaosDashEnCooldown = true
+		manejarCooldown(chaosDashBtn, tiempoCooldown, "Chaos Dash")
+	end
+
+	deathConnection = humanoid.Died:Connect(function()
+		finalizarChaosDash()
 	end)
-end
 
-if LocalPlayer.Character then
-	configurarPersonaje(LocalPlayer.Character)
-	iniciarFisicasAvanzadas(LocalPlayer.Character)
-end
+	humanoid:ChangeState(Enum.HumanoidStateType.Physics)
 
-LocalPlayer.CharacterAdded:Connect(function(nuevoChar)
-	configurarPersonaje(nuevoChar)
-	iniciarFisicasAvanzadas(nuevoChar)
+	local animacion = Instance.new("Animation")
+	animacion.AnimationId = CHAOS_ANIM_ID
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if animator then
+		animTrack = animator:LoadAnimation(animacion)
+		animTrack:Play()
+	end
+
+	if rootPart:FindFirstChild("ChaosDashAtt") then rootPart.ChaosDashAtt:Destroy() end
+	if rootPart:FindFirstChild("ChaosDashVel") then rootPart.ChaosDashVel:Destroy() end
+	if rootPart:FindFirstChild("ChaosDashGyro") then rootPart.ChaosDashGyro:Destroy() end
+
+	local attachment = Instance.new("Attachment")
+	attachment.Name = "ChaosDashAtt"
+	attachment.Parent = rootPart
+
+	local linearVelocity = Instance.new("LinearVelocity")
+	linearVelocity.Name = "ChaosDashVel"
+	linearVelocity.Attachment0 = attachment
+	linearVelocity.ForceLimitMode = Enum.ForceLimitMode.PerAxis
+	linearVelocity.MaxAxesForce = Vector3.new(100000, 100000, 100000) 
+	linearVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
+	linearVelocity.Parent = rootPart
+
+	local alignOrientation = Instance.new("AlignOrientation")
+	alignOrientation.Name = "ChaosDashGyro"
+	alignOrientation.Mode = Enum.OrientationAlignmentMode.OneAttachment
+	alignOrientation.Attachment0 = attachment
+	alignOrientation.MaxTorque = 100000
+	alignOrientation.Responsiveness = 200 
+	alignOrientation.Parent = rootPart
+
+	renderSteppedConnection = RunService.RenderStepped:Connect(function()
+		cframeActual = cframeActual:Lerp(camera.CFrame, velocidadLerp)
+		local lookVectorSuavizado = cframeActual.LookVector
+
+		if faseActual == "carga" then
+			linearVelocity.VectorVelocity = -lookVectorSuavizado * velocidadRetroceso
+		elseif faseActual == "vuelo" then
+			local tiempoTranscurrido = os.clock() - inicioVuelo
+			local progreso = math.clamp(tiempoTranscurrido / tiempoVuelo, 0, 1)
+			local velocidadActual = velocidadImpulsoMax - ((velocidadImpulsoMax - velocidadImpulsoMin) * progreso)
+			linearVelocity.VectorVelocity = lookVectorSuavizado * velocidadActual
+		end
+
+		alignOrientation.CFrame = cframeActual
+	end)
+
+	task.delay(tiempoCarga, function()
+		if not isChaosDashing then return end
+		faseActual = "vuelo"
+		inicioVuelo = os.clock()
+
+		task.delay(tiempoVuelo, function()
+			finalizarChaosDash()
+		end)
+	end)
 end)
