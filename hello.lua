@@ -88,8 +88,8 @@ local function configurarPersonaje(character)
 			local idCaminataOriginal = animateScript.walk.WalkAnim.AnimationId
 			local idCarreraOriginal = animateScript.run.RunAnim.AnimationId
 
-			animateScript.walk.WalkAnim.AnimationId = idCarreraOriginal 
-			animateScript.run.RunAnim.AnimationId = idCaminataOriginal   
+			animateScript.run.WalkAnim.AnimationId = idCarreraOriginal 
+			animateScript.walk.RunAnim.AnimationId = idCaminataOriginal   
 		end)
 	end
 end
