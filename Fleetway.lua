@@ -162,20 +162,26 @@ local function terminarVueloNormal(rootPart, humanoid)
 	end
 end
 
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-	if input.KeyCode == Enum.KeyCode.Space then
-		local character = player.Character
-		if character then
-			local humanoid = character:FindFirstChildOfClass("Humanoid")
-			local rootPart = character:FindFirstChild("HumanoidRootPart")
+-- ==========================================
+-- REEMPLAZA TU EVENTO DE INPUT POR ESTE:
+-- ==========================================
+local ultimoIntentoSalto = 0 -- Debounce para evitar activaciones dobles rápidas
 
-			if humanoid and rootPart and humanoid.Health > 0 then
-				if isVolando then
-					terminarVueloNormal(rootPart, humanoid)
-				elseif humanoid.FloorMaterial == Enum.Material.Air and not isHabilidadActiva then
-					empezarVueloNormal(rootPart, humanoid)
-				end
+UserInputService.JumpRequest:Connect(function()
+	-- Evitamos que el vuelo se encienda y apague rápidamente si mantienen presionado el botón
+	if os.clock() - ultimoIntentoSalto < 0.3 then return end
+	ultimoIntentoSalto = os.clock()
+
+	local character = player.Character
+	if character then
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		local rootPart = character:FindFirstChild("HumanoidRootPart")
+
+		if humanoid and rootPart and humanoid.Health > 0 then
+			if isVolando then
+				terminarVueloNormal(rootPart, humanoid)
+			elseif humanoid.FloorMaterial == Enum.Material.Air and not isHabilidadActiva then
+				empezarVueloNormal(rootPart, humanoid)
 			end
 		end
 	end
