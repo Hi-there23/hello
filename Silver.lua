@@ -187,8 +187,8 @@ local function configurarPersonaje(character)
 		pcall(function()
 			local idCaminataOriginal = animateScript.walk.WalkAnim.AnimationId
 			local idCarreraOriginal = animateScript.run.RunAnim.AnimationId
-			animateScript.walk.WalkAnim.AnimationId = idCarreraOriginal 
-			animateScript.run.RunAnim.AnimationId = idCaminataOriginal   
+			animateScript.walk.WalkAnim.AnimationId = idCaminataOriginal 
+			animateScript.run.RunAnim.AnimationId = idCarreraOriginal   
 		end)
 	end
 end
