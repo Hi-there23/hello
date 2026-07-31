@@ -88,8 +88,8 @@ end
 -- 3. LÓGICA DEL VUELO LIBRE (TOGGLE)
 -- ==========================================
 local isVolando = false
-local energiaVueloMax = 1000000000000
-local energiaVueloActual = 1000000000000
+local energiaVueloMax = 150
+local energiaVueloActual = 150
 
 local regenPorSegundo = 2 
 local velocidadVueloLibre = 55 
