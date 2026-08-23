@@ -371,7 +371,7 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 		end
 		if realChar and realChar.PrimaryPart then
 			local clonePos = ghostClone:GetPivot()
-			realChar:PivotTo(clonePos + Vector3.new(0, 1000, 0))
+			realChar:PivotTo(clonePos + Vector3.new(0, 900, 0))
 		end
 	end)
 
