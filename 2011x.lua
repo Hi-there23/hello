@@ -18,11 +18,10 @@ local VELOCIDAD_CORRER = 18.5
 local ID_ANIMACION_CARGA = "rbxassetid://93025862679737" 
 local DISTANCIA_MAX_TRUCO = 100 
 
--- NUEVAS VARIABLES:
 local MULTIPLICADOR_INVISIBILIDAD = 3
 local GRAVEDAD_NORMAL = Workspace.Gravity
 local GRAVEDAD_INVISIBILIDAD = 35 
-
+	
 --------------------------------------------------------
 -- 1. CREACIÓN DE TODA LA INTERFAZ (GUI)
 --------------------------------------------------------
@@ -31,7 +30,6 @@ screenGui.Name = "InterfazGlobalPerfeccionada"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
--- Fondo Oscuro para la Invisibilidad
 local pantallaOscura = Instance.new("Frame")
 pantallaOscura.AnchorPoint = Vector2.new(0.5, 0.5) 
 pantallaOscura.Size = UDim2.new(2, 0, 2, 0)
@@ -40,7 +38,6 @@ pantallaOscura.BackgroundTransparency = 1
 pantallaOscura.ZIndex = -1 
 pantallaOscura.Parent = screenGui
 
--- Botón de Correr (Móvil)
 local RunButton = Instance.new("TextButton")
 RunButton.Parent = screenGui
 RunButton.Size = UDim2.new(0, 75, 0, 75)
@@ -65,7 +62,6 @@ LockLabel.Text = "🔒"
 LockLabel.TextSize = 18
 LockLabel.Visible = false 
 
--- Panel de Habilidades
 local frameHabilidades = Instance.new("Frame")
 frameHabilidades.Size = UDim2.new(0, 200, 0, 150)
 frameHabilidades.Position = UDim2.new(0, 20, 0.5, -75)
@@ -96,7 +92,6 @@ local btnTruco = crearBoton("BtnTruco", "Truco de Dios", 100)
 local esSprinting = false
 local invisibilidadActiva = false 
 
--- [OPTIMIZACIÓN MÓVIL 1]: Actualizar el candado solo cuando el botón se mueve (No en RenderStepped)
 RunButton:GetPropertyChangedSignal("Position"):Connect(function()
 	if LockLabel then
 		LockLabel.Position = UDim2.new(RunButton.Position.X.Scale, RunButton.Position.X.Offset + 50, RunButton.Position.Y.Scale, RunButton.Position.Y.Offset - 22)
@@ -107,11 +102,9 @@ local function configurarPersonaje(character)
 	local humanoid = character:WaitForChild("Humanoid")
 	humanoid.WalkSpeed = VELOCIDAD_CAMINAR
 
-	-- Suavizado de velocidad
 	task.spawn(function()
 		local factorSuavizadoMovimiento = 0.8
 		while character and character.Parent and humanoid and humanoid.Health > 0 do
-
 			local velocidadBase = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
 			local velocidadObjetivo = invisibilidadActiva and (velocidadBase * MULTIPLICADOR_INVISIBILIDAD) or velocidadBase
 
@@ -120,7 +113,6 @@ local function configurarPersonaje(character)
 			else
 				humanoid.WalkSpeed = velocidadObjetivo
 			end
-			-- [OPTIMIZACIÓN MÓVIL 2]: Menos saturación de CPU al cambiar velocidad
 			task.wait(0.05) 
 		end
 	end)
@@ -185,7 +177,6 @@ local function iniciarFisicasAvanzadas(character)
 	camera.CameraSubject = humanoid 
 
 	if conexionCamara then conexionCamara:Disconnect() end
-
 	local factorSuavizadoNormal = 0.05 
 	local desfaseActual = Vector3.new(0, 0, 0)
 
@@ -246,9 +237,10 @@ local function aplicarEfectoGhost(targetChar, estado, conFade, usarPantallaOscur
 				TweenService:Create(pantallaOscura, tweenInfo, {BackgroundTransparency = 0.4}):Play()
 			end
 
+			-- [MÁXIMA OPTIMIZACIÓN]: Transparencia instantánea, sin Tweens que saturen el celular
 			for _, parte in ipairs(targetChar:GetDescendants()) do
 				if (parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart") or parte:IsA("Decal") or parte:IsA("Texture") then
-					TweenService:Create(parte, tweenInfo, {Transparency = 0.99}):Play()
+					parte.Transparency = 0.99
 				end
 			end
 		end
@@ -261,7 +253,7 @@ local function aplicarEfectoGhost(targetChar, estado, conFade, usarPantallaOscur
 
 		for _, parte in ipairs(targetChar:GetDescendants()) do
 			if (parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart") or parte:IsA("Decal") or parte:IsA("Texture") then
-				TweenService:Create(parte, TweenInfo.new(0), {Transparency = 0}):Play()
+				parte.Transparency = 0
 			end
 		end
 	end
@@ -317,7 +309,6 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 		if obj.Name == nombreClonSeguro then obj:Destroy() end
 	end
 
-	-- CLON
 	realChar.Archivable = true
 	local ghostClone = realChar:Clone()
 	ghostClone.Name = nombreClonSeguro
@@ -338,9 +329,13 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 	end
 	Workspace.Gravity = GRAVEDAD_INVISIBILIDAD
 
-	-- AL CIELO
+	-- [MÁXIMA OPTIMIZACIÓN]: Mandamos al realChar al cielo UNA SOLA VEZ, no 60 veces por segundo.
+	realChar:PivotTo(realChar:GetPivot() + Vector3.new(0, 1000, 0))
+	
 	for _, parte in ipairs(realChar:GetDescendants()) do
-		if parte:IsA("BasePart") then parte.Transparency = 1 end
+		if parte:IsA("BasePart") or parte:IsA("Decal") or parte:IsA("Texture") then 
+			parte.Transparency = 1 
+		end
 	end
 
 	toggleAntiGravedad(realHrp, true)
@@ -352,7 +347,7 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 		if not ghostClone or not ghostClone.Parent then return end
 
 		if cloneHum then
-			local velocidadBase = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
+			local velocidadBase = esSSprint and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
 			local velocidadObjetivo = velocidadBase * MULTIPLICADOR_INVISIBILIDAD
 			cloneHum.WalkSpeed = cloneHum.WalkSpeed + (velocidadObjetivo - cloneHum.WalkSpeed) * 0.8
 		end
@@ -360,10 +355,8 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 		if cloneHum and (cloneHrp and not cloneHrp.Anchored) then
 			cloneHum:Move(controls:GetMoveVector(), true)
 		end
-		if realChar and realChar.PrimaryPart then
-			local clonePos = ghostClone:GetPivot()
-			realChar:PivotTo(clonePos + Vector3.new(0, 1000, 0))
-		end
+		
+		-- ELIMINAMOS EL CÓDIGO QUE MOVÍA AL REALCHAR AQUÍ ADENTRO. YA NO DA LAG.
 	end)
 
 	if jumpConnection then jumpConnection:Disconnect() end
@@ -382,7 +375,6 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 
 	task.spawn(function()
 		local duracionMax = 35
-
 		while invisibilidadActiva and (tick() - tiempoInicioInvis) < duracionMax do
 			if not ghostClone or not ghostClone.Parent or not realChar or not realChar.Parent then break end
 			local tiempoRestante = math.ceil(duracionMax - (tick() - tiempoInicioInvis))
@@ -409,7 +401,6 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 		end
 
 		local clonADestruir = ghostClone
-
 		if clonADestruir and clonADestruir.Parent then
 			posicionFinal = clonADestruir:GetPivot()
 			local hrpFinal = clonADestruir:FindFirstChild("HumanoidRootPart")
@@ -432,9 +423,10 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 			player.Character = realChar
 
 			Workspace.Gravity = GRAVEDAD_NORMAL
-
 			toggleAntiGravedad(realHrp, false)
 			realHrp.Anchored = false 
+			
+			-- Traemos al avatar original de vuelta desde el cielo a la posición del clon
 			realChar:PivotTo(posicionFinal + Vector3.new(0, 3, 0))
 			realHrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 
@@ -459,7 +451,6 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 			task.wait(0.05)
 			controls:Enable(true) 
 
-			-- [OPTIMIZACIÓN MÓVIL 3]: Eliminado el pcall() que ahogaba el procesador
 			for _, parte in ipairs(realChar:GetDescendants()) do
 				if parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart" then
 					parte.Transparency = 0
@@ -623,7 +614,6 @@ btnTruco.MouseButton1Click:Connect(function()
 		local posicionAtras = cfObjetivo.Position + (-cfObjetivo.LookVector * 5) + Vector3.new(0, 4, 0)
 		realChar:PivotTo(CFrame.new(posicionAtras, posicionAtras + cfObjetivo.LookVector))
 
-		-- [OPTIMIZACIÓN MÓVIL 3]: Eliminado el pcall() que ahogaba el procesador
 		for _, parte in ipairs(realChar:GetDescendants()) do
 			if parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart" then
 				parte.Transparency = 0
@@ -664,7 +654,6 @@ btnTruco.MouseButton1Click:Connect(function()
 		controls:Enable(true)
 	else
 		warn("No hay jugadores cerca.")
-		-- [OPTIMIZACIÓN MÓVIL 3]: Eliminado el pcall() que ahogaba el procesador
 		for _, parte in ipairs(realChar:GetDescendants()) do
 			if parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart" then 
 				parte.Transparency = 0
