@@ -19,10 +19,10 @@ local ID_ANIMACION_CARGA = "rbxassetid://93025862679737"
 local DISTANCIA_MAX_TRUCO = 100 
 
 -- NUEVAS VARIABLES:
-local MULTIPLICADOR_INVISIBILIDAD = 3 -- Multiplica la velocidad x2.5 (Caminando: 12.5 | Corriendo: 46.25)
-local GRAVEDAD_NORMAL = Workspace.Gravity -- Guarda la gravedad por defecto (196.2)
-local GRAVEDAD_INVISIBILIDAD = 35 -- Gravedad aumentada (caerá más rápido y saltará menos)
-	
+local MULTIPLICADOR_INVISIBILIDAD = 3
+local GRAVEDAD_NORMAL = Workspace.Gravity
+local GRAVEDAD_INVISIBILIDAD = 35 
+
 --------------------------------------------------------
 -- 1. CREACIÓN DE TODA LA INTERFAZ (GUI)
 --------------------------------------------------------
@@ -91,14 +91,14 @@ local btnCarga = crearBoton("BtnCarga", "Carga", 50)
 local btnTruco = crearBoton("BtnTruco", "Truco de Dios", 100)
 
 --------------------------------------------------------
--- 2. SISTEMA DE MOVIMIENTO Y CÁMARA (SIN VOLTERETA)
+-- 2. SISTEMA DE MOVIMIENTO Y CÁMARA
 --------------------------------------------------------
 local esSprinting = false
-local invisibilidadActiva = false -- AÑADE ESTO AQUÍ
+local invisibilidadActiva = false 
 
--- Actualizar candado del botón de correr
-RunService.RenderStepped:Connect(function()
-	if RunButton and LockLabel then
+-- [OPTIMIZACIÓN MÓVIL 1]: Actualizar el candado solo cuando el botón se mueve (No en RenderStepped)
+RunButton:GetPropertyChangedSignal("Position"):Connect(function()
+	if LockLabel then
 		LockLabel.Position = UDim2.new(RunButton.Position.X.Scale, RunButton.Position.X.Offset + 50, RunButton.Position.Y.Scale, RunButton.Position.Y.Offset - 22)
 	end
 end)
@@ -112,18 +112,16 @@ local function configurarPersonaje(character)
 		local factorSuavizadoMovimiento = 0.8
 		while character and character.Parent and humanoid and humanoid.Health > 0 do
 
-			-- ==========================================
-			-- NUEVO: MATEMÁTICA CON MULTIPLICADOR
 			local velocidadBase = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
 			local velocidadObjetivo = invisibilidadActiva and (velocidadBase * MULTIPLICADOR_INVISIBILIDAD) or velocidadBase
-			-- ==========================================
 
 			if math.abs(humanoid.WalkSpeed - velocidadObjetivo) > 0.05 then
 				humanoid.WalkSpeed = humanoid.WalkSpeed + (velocidadObjetivo - humanoid.WalkSpeed) * factorSuavizadoMovimiento
 			else
 				humanoid.WalkSpeed = velocidadObjetivo
 			end
-			task.wait(0.02)
+			-- [OPTIMIZACIÓN MÓVIL 2]: Menos saturación de CPU al cambiar velocidad
+			task.wait(0.05) 
 		end
 	end)
 
@@ -132,8 +130,8 @@ local function configurarPersonaje(character)
 		pcall(function()
 			local idCaminataOriginal = animateScript.walk.WalkAnim.AnimationId
 			local idCarreraOriginal = animateScript.run.RunAnim.AnimationId
-			animateScript.walk.WalkAnim.AnimationId = idCaminataOriginal 
-			animateScript.run.RunAnim.AnimationId = idCarreraOriginal   
+			animateScript.walk.WalkAnim.AnimationId = idCarreraOriginal 
+			animateScript.run.RunAnim.AnimationId = idCaminataOriginal   
 		end)
 	end
 end
@@ -191,7 +189,6 @@ local function iniciarFisicasAvanzadas(character)
 	local factorSuavizadoNormal = 0.05 
 	local desfaseActual = Vector3.new(0, 0, 0)
 
-	-- Cámara con Shift Lock (SIN VOLTERETA)
 	conexionCamara = RunService.RenderStepped:Connect(function()
 		if not torso or not torso.Parent or not humanoid then
 			conexionCamara:Disconnect()
@@ -294,7 +291,6 @@ end
 -- HABILIDAD 1: INVISIBILIDAD DEFINITIVA
 --------------------------------------------------------
 local cooldownInvisibilidad = false
-local invisibilidadActiva = false
 local tiempoInicioInvis = 0
 local syncConnection = nil 
 local jumpConnection = nil
@@ -341,7 +337,6 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 		end)
 	end
 	Workspace.Gravity = GRAVEDAD_INVISIBILIDAD
-	-- ==========================================
 
 	-- AL CIELO
 	for _, parte in ipairs(realChar:GetDescendants()) do
@@ -356,22 +351,18 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 	syncConnection = RunService.RenderStepped:Connect(function()
 		if not ghostClone or not ghostClone.Parent then return end
 
-		-- ==========================================
-		-- NUEVO: VELOCIDAD DINÁMICA DEL CLON EN TIEMPO REAL
 		if cloneHum then
 			local velocidadBase = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
 			local velocidadObjetivo = velocidadBase * MULTIPLICADOR_INVISIBILIDAD
-			-- Aplica el mismo suavizado al clon
 			cloneHum.WalkSpeed = cloneHum.WalkSpeed + (velocidadObjetivo - cloneHum.WalkSpeed) * 0.8
 		end
-		-- ==========================================
 
 		if cloneHum and (cloneHrp and not cloneHrp.Anchored) then
 			cloneHum:Move(controls:GetMoveVector(), true)
 		end
 		if realChar and realChar.PrimaryPart then
 			local clonePos = ghostClone:GetPivot()
-			realChar:PivotTo(clonePos + Vector3.new(0, 900, 0))
+			realChar:PivotTo(clonePos + Vector3.new(0, 1000, 0))
 		end
 	end)
 
@@ -403,10 +394,6 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 		if syncConnection then syncConnection:Disconnect() syncConnection = nil end
 		if jumpConnection then jumpConnection:Disconnect() jumpConnection = nil end
 
-		-- ==========================================
-		-- NUEVO: INICIAR EL COOLDOWN INMEDIATAMENTE
-		-- Al ponerlo aquí arriba, garantizamos que el cooldown corra
-		-- sin importar si el personaje fue destruido o hubo un error abajo.
 		task.spawn(function()
 			for i = 20, 1, -1 do
 				btnInvisibilidad.Text = "Invis. (CD: " .. i .. "s)"
@@ -415,9 +402,7 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 			btnInvisibilidad.Text = "Invisibilidad"
 			cooldownInvisibilidad = false
 		end)
-		-- ==========================================
 
-		-- Variables seguras para evitar errores de Index Nil
 		local posicionFinal = CFrame.new()
 		if realChar and realChar.PrimaryPart then
 			posicionFinal = realChar:GetPivot() - Vector3.new(0, 100, 0)
@@ -442,7 +427,6 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 			end)
 		end
 
-		-- Agregamos verificación extra: "realHrp and realHrp.Parent" para prevenir errores
 		if realChar and realChar.Parent and realHrp and realHrp.Parent then
 			local backCamCF = camera.CFrame 
 			player.Character = realChar
@@ -475,20 +459,17 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 			task.wait(0.05)
 			controls:Enable(true) 
 
+			-- [OPTIMIZACIÓN MÓVIL 3]: Eliminado el pcall() que ahogaba el procesador
 			for _, parte in ipairs(realChar:GetDescendants()) do
-				pcall(function()
-					if parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart" then
-						parte.Transparency = 0
-					elseif parte:IsA("Decal") or parte:IsA("Texture") then
-						parte.Transparency = 0
-					elseif parte:IsA("Clothing") or parte:IsA("ShirtGraphic") then
-						parte.Parent = realChar 
-					end
-				end)
+				if parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart" then
+					parte.Transparency = 0
+				elseif parte:IsA("Decal") or parte:IsA("Texture") then
+					parte.Transparency = 0
+				elseif parte:IsA("Clothing") or parte:IsA("ShirtGraphic") then
+					parte.Parent = realChar 
+				end
 			end
 		end
-
-		-- (AQUÍ ABAJO YA NO VA EL COOLDOWN PORQUE LO MOVIMOS ARRIBA)
 	end)
 end)
 
@@ -545,38 +526,23 @@ btnCarga.MouseButton1Click:Connect(function()
 	local tiempoFin = tick() + 4.5
 	local conexion
 
-	-- ==========================================
-	-- NUEVO: Desactivamos la rotación base para controlarla nosotros
 	humanoid.AutoRotate = false 
-	-- ==========================================
 
 	conexion = RunService.RenderStepped:Connect(function()
 		if tick() < tiempoFin then
 			local lookDir = camera.CFrame.LookVector
-
-			-- 1. Actualizamos la velocidad hacia donde mira la cámara
 			linearVelocity.VectorVelocity = lookDir * 65
-
-			-- ==========================================
-			-- 2. NUEVO: Rotamos el cuerpo para alinear el Shift-Lock
-			-- Usamos Vector3.new(X, 0, Z) para que el personaje no se incline hacia el piso o el cielo
 			hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + Vector3.new(lookDir.X, 0, lookDir.Z))
-			-- ==========================================
 		else
 			conexion:Disconnect()
 			linearVelocity:Destroy()
 			attachment:Destroy()
 			controls:Enable(true) 
-
-			-- ==========================================
-			-- NUEVO: Restauramos la rotación al terminar
 			humanoid.AutoRotate = true 
-			-- ==========================================
 
 			if animTrack.IsPlaying then animTrack:Stop() end
 			hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 
-			-- COOLDOWN DE CARGA (34 Segundos)
 			task.spawn(function()
 				for i = 34, 1, -1 do
 					btnCarga.Text = "Carga (CD: " .. i .. "s)"
@@ -603,7 +569,6 @@ btnTruco.MouseButton1Click:Connect(function()
 	cooldownTruco = true
 	btnTruco.Text = "Ejecutando..."
 
-	-- 1. CLON
 	realChar.Archivable = true
 	local ghostClone = realChar:Clone()
 	ghostClone.Name = "ClonTruco_" .. player.Name
@@ -615,9 +580,8 @@ btnTruco.MouseButton1Click:Connect(function()
 	if cloneHrp then cloneHrp.Anchored = true end
 
 	camera.CameraSubject = cloneHum
-	aplicarEfectoGhost(ghostClone, true, true, false) -- Sin pantalla oscura
+	aplicarEfectoGhost(ghostClone, true, true, false) 
 
-	-- 2. MANDAR AL AVATAR REAL AL CIELO
 	for _, parte in ipairs(realChar:GetDescendants()) do
 		if parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart" then 
 			parte.Transparency = 1 
@@ -632,10 +596,8 @@ btnTruco.MouseButton1Click:Connect(function()
 	local posicionOriginal = realHrp.Position
 	realChar:PivotTo(CFrame.new(posicionOriginal + Vector3.new(0, 1000, 0)))
 
-	-- 3. ESPERA FADE
 	task.wait(1.2)
 
-	-- 4. BÚSQUEDA DE JUGADORES
 	local jugadoresCercanos = {}
 	for _, p in ipairs(Players:GetPlayers()) do
 		if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
@@ -651,7 +613,6 @@ btnTruco.MouseButton1Click:Connect(function()
 	if ghostClone then ghostClone:Destroy() end
 	camera.CameraSubject = realHumanoid
 
-	-- 5. SECUENCIA DE ATAQUE
 	if #jugadoresCercanos > 0 then
 		local objetivoAleatorio = jugadoresCercanos[math.random(1, #jugadoresCercanos)]
 		local objetivoHrp = objetivoAleatorio.Character.HumanoidRootPart
@@ -662,14 +623,13 @@ btnTruco.MouseButton1Click:Connect(function()
 		local posicionAtras = cfObjetivo.Position + (-cfObjetivo.LookVector * 5) + Vector3.new(0, 4, 0)
 		realChar:PivotTo(CFrame.new(posicionAtras, posicionAtras + cfObjetivo.LookVector))
 
+		-- [OPTIMIZACIÓN MÓVIL 3]: Eliminado el pcall() que ahogaba el procesador
 		for _, parte in ipairs(realChar:GetDescendants()) do
-			pcall(function()
-				if parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart" then
-					parte.Transparency = 0
-				elseif parte:IsA("Decal") or parte:IsA("Texture") then
-					parte.Transparency = 0
-				end
-			end)
+			if parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart" then
+				parte.Transparency = 0
+			elseif parte:IsA("Decal") or parte:IsA("Texture") then
+				parte.Transparency = 0
+			end
 		end
 
 		realHrp.Anchored = false
@@ -704,17 +664,18 @@ btnTruco.MouseButton1Click:Connect(function()
 		controls:Enable(true)
 	else
 		warn("No hay jugadores cerca.")
+		-- [OPTIMIZACIÓN MÓVIL 3]: Eliminado el pcall() que ahogaba el procesador
 		for _, parte in ipairs(realChar:GetDescendants()) do
-			pcall(function()
-				if parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart" then parte.Transparency = 0
-				elseif parte:IsA("Decal") or parte:IsA("Texture") then parte.Transparency = 0 end
-			end)
+			if parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart" then 
+				parte.Transparency = 0
+			elseif parte:IsA("Decal") or parte:IsA("Texture") then 
+				parte.Transparency = 0 
+			end
 		end
 		toggleAntiGravedad(realHrp, false)
 		realChar:PivotTo(CFrame.new(posicionOriginal) * realHrp.CFrame.Rotation)
 	end
 
-	-- COOLDOWN DE TRUCO DE DIOS (45 Segundos)
 	task.spawn(function()
 		for i = 45, 1, -1 do
 			btnTruco.Text = "Truco (CD: " .. i .. "s)"
