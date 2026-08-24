@@ -64,7 +64,8 @@ LockLabel.Visible = false
 
 local frameHabilidades = Instance.new("Frame")
 frameHabilidades.Size = UDim2.new(0, 200, 0, 150)
-frameHabilidades.Position = UDim2.new(0, 20, 0.5, -75)
+frameHabilidades.AnchorPoint = Vector2.new(0.5, 0.5)
+frameHabilidades.Position = UDim2.new(0.9, 0, 0.65, -75)
 frameHabilidades.BackgroundTransparency = 1
 frameHabilidades.Parent = screenGui
 
@@ -98,25 +99,17 @@ RunButton:GetPropertyChangedSignal("Position"):Connect(function()
 	end
 end)
 
+local function actualizarVelocidad()
+	local char = player.Character
+	local hum = char and char:FindFirstChild("Humanoid")
+	if hum then
+		local velocidadBase = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
+		hum.WalkSpeed = invisibilidadActiva and (velocidadBase * MULTIPLICADOR_INVISIBILIDAD) or velocidadBase
+	end
+end
+
 local function configurarPersonaje(character)
-	local humanoid = character:WaitForChild("Humanoid")
-	humanoid.WalkSpeed = VELOCIDAD_CAMINAR
-
-	task.spawn(function()
-		local factorSuavizadoMovimiento = 0.8
-		while character and character.Parent and humanoid and humanoid.Health > 0 do
-			local velocidadBase = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
-			local velocidadObjetivo = invisibilidadActiva and (velocidadBase * MULTIPLICADOR_INVISIBILIDAD) or velocidadBase
-
-			if math.abs(humanoid.WalkSpeed - velocidadObjetivo) > 0.05 then
-				humanoid.WalkSpeed = humanoid.WalkSpeed + (velocidadObjetivo - humanoid.WalkSpeed) * factorSuavizadoMovimiento
-			else
-				humanoid.WalkSpeed = velocidadObjetivo
-			end
-			task.wait(0.05) 
-		end
-	end)
-
+	actualizarVelocidad()
 	local animateScript = character:WaitForChild("Animate", 5)
 	if animateScript then
 		pcall(function()
@@ -151,19 +144,15 @@ end)
 RunButton.MouseButton1Up:Connect(function()
 	if manteniendoBoton then
 		manteniendoBoton = false
-		local character = player.Character
-		local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-		if humanoid then
-			if not esSprinting then
-				esSprinting = true
-				RunButton.BackgroundColor3 = Color3.fromRGB(230, 50, 50)
-				RunButton.Text = "RÁPIDO"
-			else
-				esSprinting = false
-				RunButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
-				RunButton.Text = "CORRER"
-			end
+		esSprinting = not esSprinting
+		if esSprinting then
+			RunButton.BackgroundColor3 = Color3.fromRGB(230, 50, 50)
+			RunButton.Text = "RÁPIDO"
+		else
+			RunButton.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+			RunButton.Text = "CORRER"
 		end
+		actualizarVelocidad()
 	end
 end)
 
@@ -177,7 +166,6 @@ local function iniciarFisicasAvanzadas(character)
 	camera.CameraSubject = humanoid 
 
 	if conexionCamara then conexionCamara:Disconnect() end
-	local factorSuavizadoNormal = 0.05 
 	local desfaseActual = Vector3.new(0, 0, 0)
 
 	conexionCamara = RunService.RenderStepped:Connect(function()
@@ -186,15 +174,13 @@ local function iniciarFisicasAvanzadas(character)
 			return
 		end
 
-		local shiftLockActivo = (UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter)
-		if shiftLockActivo then
+		if UserInputService.MouseBehavior == Enum.MouseBehavior.LockCenter then
 			humanoid.CameraOffset = Vector3.new(0, 0, 0)
 			desfaseActual = Vector3.new(0, 0, 0)
 		else
-			local velocidadTorso = torso.AssemblyLinearVelocity
-			local desfaseObjetivo = Vector3.new(0, 0, -velocidadTorso.Z) * 0.04
-			desfaseObjetivo = Vector3.new(math.clamp(0, -1.8, 1.8), 0, math.clamp(desfaseObjetivo.Z, -1.8, 1.8))
-			desfaseActual = desfaseActual:Lerp(desfaseObjetivo, factorSuavizadoNormal)
+			local velZ = torso.AssemblyLinearVelocity.Z
+			local desfaseObjetivo = Vector3.new(0, 0, math.clamp(-velZ * 0.04, -1.8, 1.8))
+			desfaseActual = desfaseActual:Lerp(desfaseObjetivo, 0.05)
 			humanoid.CameraOffset = desfaseActual
 		end
 	end)
@@ -212,6 +198,14 @@ end)
 --------------------------------------------------------
 -- 3. FUNCIONES AUXILIARES PARA LAS HABILIDADES
 --------------------------------------------------------
+local function limpiarScriptsDeClon(clon)
+	for _, v in ipairs(clon:GetDescendants()) do
+		if v:IsA("LocalScript") or v:IsA("Script") then
+			v:Destroy()
+		end
+	end
+end
+
 local function aplicarEfectoGhost(targetChar, estado, conFade, usarPantallaOscura)
 	if not targetChar then return end
 	local humanoid = targetChar:FindFirstChild("Humanoid")
@@ -230,14 +224,12 @@ local function aplicarEfectoGhost(targetChar, estado, conFade, usarPantallaOscur
 			nuevoHl.OutlineTransparency = 1
 			nuevoHl.Parent = targetChar
 
-			local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-			TweenService:Create(nuevoHl, tweenInfo, {FillTransparency = 0.3, OutlineTransparency = 0.2}):Play()
+			TweenService:Create(nuevoHl, TweenInfo.new(1), {FillTransparency = 0.3, OutlineTransparency = 0.2}):Play()
 
 			if usarPantallaOscura ~= false then
-				TweenService:Create(pantallaOscura, tweenInfo, {BackgroundTransparency = 0.4}):Play()
+				TweenService:Create(pantallaOscura, TweenInfo.new(1), {BackgroundTransparency = 0.4}):Play()
 			end
 
-			-- [MÁXIMA OPTIMIZACIÓN]: Transparencia instantánea, sin Tweens que saturen el celular
 			for _, parte in ipairs(targetChar:GetDescendants()) do
 				if (parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart") or parte:IsA("Decal") or parte:IsA("Texture") then
 					parte.Transparency = 0.99
@@ -300,6 +292,7 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 	cooldownInvisibilidad = true
 	invisibilidadActiva = true
 	tiempoInicioInvis = tick()
+	actualizarVelocidad()
 
 	local realHrp = realChar.HumanoidRootPart
 	local realHumanoid = realChar:FindFirstChild("Humanoid")
@@ -312,6 +305,7 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 	realChar.Archivable = true
 	local ghostClone = realChar:Clone()
 	ghostClone.Name = nombreClonSeguro
+	limpiarScriptsDeClon(ghostClone) -- Evita duplicación de scripts
 	ghostClone:PivotTo(realChar:GetPivot())
 	ghostClone.Parent = Workspace
 
@@ -321,17 +315,10 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 	local animateScript = realChar:FindFirstChild("Animate")
 	if animateScript then animateScript:Clone().Parent = ghostClone end
 
-	if cloneHrp then
-		cloneHrp.Anchored = true
-		task.delay(0.05, function()
-			if invisibilidadActiva and cloneHrp and cloneHrp.Parent then cloneHrp.Anchored = false end
-		end)
-	end
+	if cloneHrp then cloneHrp.Anchored = false end
 	Workspace.Gravity = GRAVEDAD_INVISIBILIDAD
 
-	-- [MÁXIMA OPTIMIZACIÓN]: Mandamos al realChar al cielo UNA SOLA VEZ, no 60 veces por segundo.
 	realChar:PivotTo(realChar:GetPivot() + Vector3.new(0, 1000, 0))
-	
 	for _, parte in ipairs(realChar:GetDescendants()) do
 		if parte:IsA("BasePart") or parte:IsA("Decal") or parte:IsA("Texture") then 
 			parte.Transparency = 1 
@@ -347,21 +334,18 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 		if not ghostClone or not ghostClone.Parent then return end
 
 		if cloneHum then
-			local velocidadBase = esSSprint and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
-			local velocidadObjetivo = velocidadBase * MULTIPLICADOR_INVISIBILIDAD
-			cloneHum.WalkSpeed = cloneHum.WalkSpeed + (velocidadObjetivo - cloneHum.WalkSpeed) * 0.8
+			local velBase = esSprinting and VELOCIDAD_CORRER or VELOCIDAD_CAMINAR
+			cloneHum.WalkSpeed = velBase * MULTIPLICADOR_INVISIBILIDAD
 		end
 
 		if cloneHum and (cloneHrp and not cloneHrp.Anchored) then
 			cloneHum:Move(controls:GetMoveVector(), true)
 		end
-		
-		-- ELIMINAMOS EL CÓDIGO QUE MOVÍA AL REALCHAR AQUÍ ADENTRO. YA NO DA LAG.
 	end)
 
 	if jumpConnection then jumpConnection:Disconnect() end
 	jumpConnection = UserInputService.JumpRequest:Connect(function()
-		if invisibilidadActiva and cloneHum and (cloneHrp and not cloneHrp.Anchored) then
+		if invisibilidadActiva and cloneHum and cloneHum:GetState() ~= Enum.HumanoidStateType.Jumping then
 			cloneHum.Jump = true
 		end
 	end)
@@ -383,6 +367,7 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 		end
 
 		invisibilidadActiva = false
+		actualizarVelocidad()
 		if syncConnection then syncConnection:Disconnect() syncConnection = nil end
 		if jumpConnection then jumpConnection:Disconnect() jumpConnection = nil end
 
@@ -396,26 +381,10 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 		end)
 
 		local posicionFinal = CFrame.new()
-		if realChar and realChar.PrimaryPart then
-			posicionFinal = realChar:GetPivot() - Vector3.new(0, 100, 0)
-		end
-
 		local clonADestruir = ghostClone
 		if clonADestruir and clonADestruir.Parent then
 			posicionFinal = clonADestruir:GetPivot()
-			local hrpFinal = clonADestruir:FindFirstChild("HumanoidRootPart")
-			if hrpFinal then hrpFinal.Anchored = true end
-
-			if cloneHum then
-				local animator = cloneHum:FindFirstChild("Animator")
-				if animator then
-					for _, track in ipairs(animator:GetPlayingAnimationTracks()) do track:Stop() end
-				end
-			end
-			aplicarEfectoGhost(clonADestruir, false, false)
-			task.delay(0.01, function()
-				if clonADestruir then clonADestruir:Destroy() end
-			end)
+			clonADestruir:Destroy()
 		end
 
 		if realChar and realChar.Parent and realHrp and realHrp.Parent then
@@ -426,7 +395,6 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 			toggleAntiGravedad(realHrp, false)
 			realHrp.Anchored = false 
 			
-			-- Traemos al avatar original de vuelta desde el cielo a la posición del clon
 			realChar:PivotTo(posicionFinal + Vector3.new(0, 3, 0))
 			realHrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 
@@ -456,8 +424,6 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 					parte.Transparency = 0
 				elseif parte:IsA("Decal") or parte:IsA("Texture") then
 					parte.Transparency = 0
-				elseif parte:IsA("Clothing") or parte:IsA("ShirtGraphic") then
-					parte.Parent = realChar 
 				end
 			end
 		end
@@ -465,7 +431,7 @@ btnInvisibilidad.MouseButton1Click:Connect(function()
 end)
 
 --------------------------------------------------------
--- HABILIDAD 2: CARGA
+-- HABILIDAD 2: CARGA (FÍSICAS REPARADAS)
 --------------------------------------------------------
 local cooldownCarga = false
 btnCarga.MouseButton1Click:Connect(function()
@@ -491,15 +457,9 @@ btnCarga.MouseButton1Click:Connect(function()
 		task.wait(0.4)
 	end
 	highlight:Destroy()
-
 	task.wait(0.8)
 
-	local animator = humanoid:FindFirstChildOfClass("Animator")
-	if not animator then
-		animator = Instance.new("Animator")
-		animator.Parent = humanoid
-	end
-
+	local animator = humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", humanoid)
 	local animacionCarga = Instance.new("Animation")
 	animacionCarga.AnimationId = ID_ANIMACION_CARGA
 	local animTrack = animator:LoadAnimation(animacionCarga)
@@ -508,11 +468,16 @@ btnCarga.MouseButton1Click:Connect(function()
 	controls:Disable() 
 
 	local attachment = Instance.new("Attachment", hrp)
-	local linearVelocity = Instance.new("LinearVelocity")
+	local linearVelocity = Instance.new("LinearVelocity", hrp)
 	linearVelocity.Attachment0 = attachment
 	linearVelocity.MaxForce = 9999999
 	linearVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
-	linearVelocity.Parent = hrp
+	
+	-- Ya no usamos CFrame.lookAt por fotograma, usamos físicas reales (0 LAG)
+	local alignOrientation = Instance.new("AlignOrientation", hrp)
+	alignOrientation.Mode = Enum.OrientationAlignmentMode.OneAttachment
+	alignOrientation.Attachment0 = attachment
+	alignOrientation.MaxTorque = 9999999
 
 	local tiempoFin = tick() + 4.5
 	local conexion
@@ -522,11 +487,12 @@ btnCarga.MouseButton1Click:Connect(function()
 	conexion = RunService.RenderStepped:Connect(function()
 		if tick() < tiempoFin then
 			local lookDir = camera.CFrame.LookVector
-			linearVelocity.VectorVelocity = lookDir * 65
-			hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + Vector3.new(lookDir.X, 0, lookDir.Z))
+			linearVelocity.VectorVelocity = Vector3.new(lookDir.X, 0, lookDir.Z).Unit * 65
+			alignOrientation.CFrame = CFrame.lookAt(Vector3.zero, Vector3.new(lookDir.X, 0, lookDir.Z))
 		else
 			conexion:Disconnect()
 			linearVelocity:Destroy()
+			alignOrientation:Destroy()
 			attachment:Destroy()
 			controls:Enable(true) 
 			humanoid.AutoRotate = true 
@@ -563,20 +529,16 @@ btnTruco.MouseButton1Click:Connect(function()
 	realChar.Archivable = true
 	local ghostClone = realChar:Clone()
 	ghostClone.Name = "ClonTruco_" .. player.Name
+	limpiarScriptsDeClon(ghostClone)
 	ghostClone:PivotTo(realChar:GetPivot())
 	ghostClone.Parent = Workspace
 
-	local cloneHrp = ghostClone:FindFirstChild("HumanoidRootPart")
 	local cloneHum = ghostClone:FindFirstChild("Humanoid")
-	if cloneHrp then cloneHrp.Anchored = true end
-
 	camera.CameraSubject = cloneHum
 	aplicarEfectoGhost(ghostClone, true, true, false) 
 
 	for _, parte in ipairs(realChar:GetDescendants()) do
-		if parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart" then 
-			parte.Transparency = 1 
-		elseif parte:IsA("Decal") or parte:IsA("Texture") then 
+		if (parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart") or parte:IsA("Decal") or parte:IsA("Texture") then 
 			parte.Transparency = 1 
 		end
 	end
@@ -594,10 +556,7 @@ btnTruco.MouseButton1Click:Connect(function()
 		if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
 			local objetivoHrp = p.Character.HumanoidRootPart
 			local distancia = (posicionOriginal - objetivoHrp.Position).Magnitude
-
-			if distancia <= DISTANCIA_MAX_TRUCO then
-				table.insert(jugadoresCercanos, p)
-			end
+			if distancia <= DISTANCIA_MAX_TRUCO then table.insert(jugadoresCercanos, p) end
 		end
 	end
 
@@ -615,9 +574,7 @@ btnTruco.MouseButton1Click:Connect(function()
 		realChar:PivotTo(CFrame.new(posicionAtras, posicionAtras + cfObjetivo.LookVector))
 
 		for _, parte in ipairs(realChar:GetDescendants()) do
-			if parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart" then
-				parte.Transparency = 0
-			elseif parte:IsA("Decal") or parte:IsA("Texture") then
+			if (parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart") or parte:IsA("Decal") or parte:IsA("Texture") then
 				parte.Transparency = 0
 			end
 		end
@@ -627,7 +584,6 @@ btnTruco.MouseButton1Click:Connect(function()
 		realHrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
 
 		task.wait(2)
-
 		toggleAntiGravedad(realHrp, false)
 
 		local att = Instance.new("Attachment", realHrp)
@@ -637,28 +593,21 @@ btnTruco.MouseButton1Click:Connect(function()
 		lv.RelativeTo = Enum.ActuatorRelativeTo.World
 
 		local tiempoInicioDash = tick()
-
 		while objetivoHrp and objetivoHrp.Parent do
-			local distancia = (objetivoHrp.Position - realHrp.Position).Magnitude
-			if distancia < 4 or (tick() - tiempoInicioDash > 2.5) then break end
-
-			local direccion = (objetivoHrp.Position - realHrp.Position).Unit
-			lv.VectorVelocity = direccion * 120 
+			if (objetivoHrp.Position - realHrp.Position).Magnitude < 4 or (tick() - tiempoInicioDash > 2.5) then break end
+			lv.VectorVelocity = (objetivoHrp.Position - realHrp.Position).Unit * 120 
 			RunService.RenderStepped:Wait()
 		end
 
 		if lv then lv:Destroy() end
 		if att then att:Destroy() end
 		realHrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-
 		controls:Enable(true)
 	else
 		warn("No hay jugadores cerca.")
 		for _, parte in ipairs(realChar:GetDescendants()) do
-			if parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart" then 
+			if (parte:IsA("BasePart") and parte.Name ~= "HumanoidRootPart") or parte:IsA("Decal") or parte:IsA("Texture") then 
 				parte.Transparency = 0
-			elseif parte:IsA("Decal") or parte:IsA("Texture") then 
-				parte.Transparency = 0 
 			end
 		end
 		toggleAntiGravedad(realHrp, false)
