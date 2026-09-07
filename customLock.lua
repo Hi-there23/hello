@@ -15,7 +15,7 @@ gui.Parent = player:WaitForChild("PlayerGui")
 -- Botón de Candado (Esquina inferior derecha)
 local lockBtn = Instance.new("ImageButton")
 lockBtn.Size = UDim2.new(0, 50, 0, 50)
-lockBtn.Position = UDim2.new(1, -70, 1, -150)
+lockBtn.Position = UDim2.new(1, -70, 1, -95)
 lockBtn.Image = "rbxassetid://7733658504"
 lockBtn.BackgroundTransparency = 1
 lockBtn.Parent = gui
