@@ -124,8 +124,8 @@ end
 -- 3. LÓGICA DEL DROPDASH
 -- ==========================================
 local isDropdashing = false
-local dropdashVelocidad = 50 
-local tiempoDropdash = 4.5  
+local dropdashVelocidad = 45 
+local tiempoDropdash = 8.5
 local tiempoCooldownDropdash = 22 
 
 dropdashBtn.MouseButton1Click:Connect(function()
@@ -265,11 +265,11 @@ end)
 -- 4. LÓGICA DEL PEELOUT
 -- ==========================================
 local isPeelouting = false
-local peeloutVelocidad = 120 
+local peeloutVelocidad = 65 
 local tiempoPeelout = 7.5 
 local tiempoCarga = 3.5 
 local tiempoEsperaAgarre = 1.2 
-local tiempoCooldownPeelout = 24 
+local tiempoCooldownPeelout = 44 
 
 peeloutBtn.MouseButton1Click:Connect(function()
 	if isHabilidadActiva or peeloutEnCooldown then return end
@@ -291,31 +291,71 @@ peeloutBtn.MouseButton1Click:Connect(function()
 	local jugadorAgarrado = nil 
 	local ultimoAgarre = 0 
 
+	local camera = workspace.CurrentCamera 
+
 	local originalWalkSpeed = humanoid.WalkSpeed
 	local originalJumpPower = humanoid.JumpPower
+	local originalAutoRotate = humanoid.AutoRotate 
 
-	local function finalizarPeelout()
+	local function finalizarPeelout(murio)
 		if not isPeelouting then return end 
 
 		isPeelouting = false
-		isHabilidadActiva = false 
 		jugadorAgarrado = nil
 
-		if humanoid then
-			humanoid.WalkSpeed = originalWalkSpeed
-			humanoid.JumpPower = originalJumpPower
-		end
-
+		-- 1. Desconectamos el movimiento guiado de inmediato
 		if renderSteppedConnection then renderSteppedConnection:Disconnect() end
 		if touchConnection then touchConnection:Disconnect() end
 		if animTrack then animTrack:Stop() end
 		if deathConnection then deathConnection:Disconnect() end
 
-		-- Destruimos la hitbox fantasma para volver a chocar con jugadores
+		-- 2. Limpiamos hitboxes fantasmas
 		if character and character:FindFirstChild("NoColConstraints") then
 			character.NoColConstraints:Destroy()
 		end
 
+		-- ==========================================
+		-- ANIMACIÓN FINAL Y CONGELAMIENTO (Estilo Recarga)
+		-- ==========================================
+		if not murio and humanoid and humanoid.Health > 0 then
+			-- Reutilizamos el LinearVelocity para clavar el jugador al sitio (X y Z = 0), igual que en la fase de carga.
+			-- No flotará porque la fuerza en Y sigue siendo 0, permitiendo que actúe la gravedad.
+			local vel = rootPart:FindFirstChild("PeeloutVel")
+			if vel then
+				vel.VectorVelocity = Vector3.new(0, 0, 0)
+				vel.MaxAxesForce = Vector3.new(100000, 0, 100000)
+			end
+
+			-- Matamos cualquier inercia residual de Roblox
+			rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+			
+			-- Aplicamos el mismo estado que en la fase de carga
+			humanoid.WalkSpeed = 0
+			humanoid.JumpPower = 0
+			humanoid.AutoRotate = false 
+
+			-- Reproducimos la animación final
+			local animFinal = Instance.new("Animation")
+			animFinal.AnimationId = "rbxassetid://115485274167727"
+			
+			local trackFinal = nil
+			local animator = humanoid:FindFirstChildOfClass("Animator")
+			if animator then
+				trackFinal = animator:LoadAnimation(animFinal)
+				trackFinal:Play()
+			end
+
+			-- Esperamos los 0.15 segundos congelados sin poder moverse
+			task.wait(0.75)
+
+			-- Detenemos la animación
+			if trackFinal then
+				trackFinal:Stop()
+			end
+		end
+		-- ==========================================
+
+		-- 3. AHORA SÍ, destruimos los empujes para devolverle la libertad física completa
 		if rootPart then
 			local att = rootPart:FindFirstChild("PeeloutAtt")
 			if att then att:Destroy() end
@@ -323,18 +363,28 @@ peeloutBtn.MouseButton1Click:Connect(function()
 			if vel then vel:Destroy() end
 		end
 
-		-- Iniciar cooldown del Peelout
+		isHabilidadActiva = false 
+
+		-- Restauramos los controles normales
+		if humanoid then
+			humanoid.WalkSpeed = originalWalkSpeed
+			humanoid.JumpPower = originalJumpPower
+			humanoid.AutoRotate = originalAutoRotate 
+		end
+
+		-- Iniciar cooldown
 		peeloutEnCooldown = true
 		manejarCooldown(peeloutBtn, tiempoCooldownPeelout, "Peelout", "peelout")
 	end
 
 	deathConnection = humanoid.Died:Connect(function()
-		finalizarPeelout()
+		finalizarPeelout(true)
 	end)
 
 	-- FASE 1: CARGA
 	humanoid.WalkSpeed = 0
 	humanoid.JumpPower = 0
+	humanoid.AutoRotate = false 
 
 	if rootPart:FindFirstChild("PeeloutAtt") then rootPart.PeeloutAtt:Destroy() end
 	if rootPart:FindFirstChild("PeeloutVel") then rootPart.PeeloutVel:Destroy() end
@@ -361,6 +411,33 @@ peeloutBtn.MouseButton1Click:Connect(function()
 		animTrack:Play()
 	end
 
+	local isCargando = true 
+
+	renderSteppedConnection = RunService.RenderStepped:Connect(function()
+		if isCargando then
+			-- Fase de recarga (Estático)
+		else
+			-- Fase de carrera (Shiftlock Activo)
+			local lookVector = camera.CFrame.LookVector
+			local orientacionPlana = Vector3.new(lookVector.X, 0, lookVector.Z)
+
+			if orientacionPlana.Magnitude > 0.001 then
+				rootPart.CFrame = CFrame.new(rootPart.Position, rootPart.Position + orientacionPlana.Unit)
+			end
+
+			linearVelocity.VectorVelocity = rootPart.CFrame.LookVector * peeloutVelocidad
+
+			if jugadorAgarrado then
+				local enemigoRoot = jugadorAgarrado:FindFirstChild("HumanoidRootPart")
+				if enemigoRoot then
+					enemigoRoot.CFrame = rootPart.CFrame * CFrame.new(0, 5, 0)
+				else
+					jugadorAgarrado = nil
+				end
+			end
+		end
+	end)
+
 	local t = 0
 	while t < tiempoCarga and isPeelouting and humanoid.Health > 0 do
 		local dt = task.wait()
@@ -373,23 +450,11 @@ peeloutBtn.MouseButton1Click:Connect(function()
 	if not isPeelouting or humanoid.Health <= 0 then return end
 
 	-- FASE 2: IMPULSO
-	-- Nos volvemos intangibles para otros jugadores (evita que tapen el paso)
+	isCargando = false 
+
 	crearHitboxFantasma(character)
 
 	linearVelocity.MaxAxesForce = Vector3.new(40000, 0, 40000) 
-
-	renderSteppedConnection = RunService.RenderStepped:Connect(function()
-		linearVelocity.VectorVelocity = rootPart.CFrame.LookVector * peeloutVelocidad
-
-		if jugadorAgarrado then
-			local enemigoRoot = jugadorAgarrado:FindFirstChild("HumanoidRootPart")
-			if enemigoRoot then
-				enemigoRoot.CFrame = rootPart.CFrame * CFrame.new(0, 5, 0)
-			else
-				jugadorAgarrado = nil
-			end
-		end
-	end)
 
 	touchConnection = rootPart.Touched:Connect(function(hit)
 		if not isPeelouting then return end
@@ -420,6 +485,6 @@ peeloutBtn.MouseButton1Click:Connect(function()
 	end)
 
 	task.delay(tiempoPeelout, function()
-		finalizarPeelout()
+		finalizarPeelout(false)
 	end)
 end)
