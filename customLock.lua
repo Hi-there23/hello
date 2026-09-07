@@ -9,22 +9,23 @@ local player = Players.LocalPlayer
 local gui = Instance.new("ScreenGui")
 gui.Name = "CustomShiftLockUI"
 gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true -- Clave para ignorar la barra superior de Roblox en celulares y PC
 gui.Parent = player:WaitForChild("PlayerGui")
 
--- Botón de Candado
+-- Botón de Candado (Esquina inferior derecha)
 local lockBtn = Instance.new("ImageButton")
 lockBtn.Size = UDim2.new(0, 50, 0, 50)
-lockBtn.Position = UDim2.new(1, -70, 1, -70)
+lockBtn.Position = UDim2.new(1, -70, 1, -500)
 lockBtn.Image = "rbxassetid://7733658504"
 lockBtn.BackgroundTransparency = 1
 lockBtn.Parent = gui
 
--- Imagen del centro (Retícula)
+-- Imagen del centro (Retícula perfectamente adaptada a cualquier pantalla)
 local centerImage = Instance.new("ImageLabel")
-centerImage.Size = UDim2.new(0, 0, 0, 0)
-centerImage.Position = UDim2.new(0.5, 0, 0.5, 0)
-centerImage.AnchorPoint = Vector2.new(0.5, 0.5)
-centerImage.Image = "rbxassetid://10942997895"
+centerImage.Size = UDim2.new(0, 0, 0, 0) -- Inicia cerrada
+centerImage.AnchorPoint = Vector2.new(0.5, 0.5) -- Centro exacto de la imagen
+centerImage.Position = UDim2.new(0.5, 0, 0.5, 0) -- Centro exacto de la pantalla
+centerImage.Image = "rbxassetid://10942997895" -- Tu ID solicitado
 centerImage.ImageTransparency = 1 
 centerImage.Rotation = -90 
 centerImage.BackgroundTransparency = 1
@@ -43,7 +44,7 @@ local tweenInfoUI = TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirecti
 local tweenInfoCam = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
 local tweenIn = TweenService:Create(centerImage, tweenInfoUI, {
-	Size = UDim2.new(0, 40, 0, 40),
+	Size = UDim2.new(0, 40, 0, 40), -- Tamaño final de la retícula
 	ImageTransparency = 0,
 	Rotation = 0
 })
@@ -59,21 +60,17 @@ local function toggleShiftLock()
 	isShiftLocked = not isShiftLocked
 
 	local camera = workspace.CurrentCamera
-
-	-- Guardamos la rotación exacta actual y preparamos el fix de 2 frames
 	savedRotation = camera.CFrame.Rotation
 	framesToFix = 2 
 
 	if isShiftLocked then
 		tweenIn:Play()
 		if currentHumanoid then
-			-- Deslizamiento suave hacia el hombro
 			TweenService:Create(currentHumanoid, tweenInfoCam, {CameraOffset = Vector3.new(1.75, 0, 0)}):Play()
 		end
 	else
 		tweenOut:Play()
 		if currentHumanoid then
-			-- Deslizamiento suave hacia el centro
 			TweenService:Create(currentHumanoid, tweenInfoCam, {CameraOffset = Vector3.new(0, 0, 0)}):Play()
 		end
 		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
@@ -82,13 +79,11 @@ end
 
 lockBtn.MouseButton1Click:Connect(toggleShiftLock)
 
--- Usamos BindToRenderStep con prioridad 'Camera + 1' (201) para sobreescribir el movimiento brusco
+-- Mantener la cámara estable y el mouse bloqueado al centro
 RunService:BindToRenderStep("CustomShiftLockUpdate", Enum.RenderPriority.Camera.Value + 1, function()
 	local camera = workspace.CurrentCamera
 
-	-- Si acabamos de activar/desactivar, forzamos a la cámara a mantener su rotación original por un instante
 	if framesToFix > 0 then
-		-- Mantenemos la nueva posición (el tween) pero ignoramos la rotación falsa del latigazo
 		camera.CFrame = CFrame.new(camera.CFrame.Position) * savedRotation
 		framesToFix -= 1
 	end
@@ -98,7 +93,7 @@ RunService:BindToRenderStep("CustomShiftLockUpdate", Enum.RenderPriority.Camera.
 	end
 end)
 
--- Actualizar el personaje
+-- Actualizar el personaje al reaparecer
 local function onCharacterAdded(character)
 	currentHumanoid = character:WaitForChild("Humanoid")
 	if isShiftLocked then
@@ -111,7 +106,7 @@ if player.Character then
 end
 player.CharacterAdded:Connect(onCharacterAdded)
 
--- Activar con teclado
+-- Activar con teclado (Cualquier Shift)
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end 
 	if input.KeyCode == Enum.KeyCode.LeftShift or input.KeyCode == Enum.KeyCode.RightShift then
